@@ -66,6 +66,12 @@ const ICONS = {
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
   save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8M8 21v-7h8v7"/>',
+  voice: '<path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 8.5c1.2 1 1.2 6 0 7M19 6c2.5 2.5 2.5 9.5 0 12"/><circle cx="20.5" cy="3.5" r="1.5"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  body: '<circle cx="12" cy="4" r="2"/><path d="M8 8h8l-1 7h-6zM9 15l-1 7M15 15l1 7M8 8l-3 6M16 8l3 6"/>',
+  bed: '<path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="2"/>',
+  report: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  cloudOff: '<path d="M3 3l18 18"/><path d="M7 18H6a4 4 0 0 1-.6-8M10 6.3A6 6 0 0 1 18 10a3.5 3.5 0 0 1 2.4 6.2"/>',
 };
 const icon = (n, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
@@ -75,6 +81,7 @@ const app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const muscle = m => t('muscles')[m] || m;
 const equip = e => t('equipDb')[e] || e;
+const thumb = ex => ex?.images?.length ? `<img class="thumb" src="${img(ex)}" alt="" loading="lazy">` : `<span class="thumb icon-thumb">${icon('dumbbell')}</span>`;
 const img = (ex, n = 0) => ex?.images?.[n] ? `/img/${encodeURI(ex.images[n])}` : '';
 const fmt = (n, d = 1) => Number(n || 0).toLocaleString(L.locale, { maximumFractionDigits: d });
 const parseDate = d => new Date(d.replace(' ', 'T') + (d.length > 10 ? 'Z' : 'T12:00:00'));
@@ -93,15 +100,108 @@ const weekdayIdx = (d = new Date()) => (d.getDay() + 6) % 7;
 const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const fmtBytes = b => b > 1e9 ? `${fmt(b / 1e9)} GB` : `${fmt(b / 1e6, 0)} MB`;
 
+// ---------- Offline: ändringar köas och skickas när servern går att nå igen ----------
+const OUTBOX = 'outbox';
+const outbox = () => store.get(OUTBOX) || [];
+const tmpMap = () => store.get('tmpIds') || {};
+const QUEUEABLE = [/^\/sessions\/[\w-]+\/(sets|rpe|finish|swap)$/, /^\/sessions\/[\w-]+$/, /^\/users\/\d+\/(sessions|bodyweight|measurements)$/];
+const resolveTmp = path => path.replace(/off-\d+/g, m => tmpMap()[m] || m);
+let offline = false;
+function setOffline(on) {
+  offline = on;
+  const bar = $('#netbar'); if (!bar) return;
+  const n = outbox().length;
+  bar.hidden = !on && !n;
+  bar.innerHTML = on ? `${icon('cloudOff', 'sm')} ${t('offlineBar')}${n ? ' · ' + t('offlinePending', { n }) : ''}` : `${icon('swap', 'sm')} ${t('syncing', { n })}`;
+  bar.classList.toggle('warn', on);
+}
+function queueWrite(method, path, body) {
+  const box = outbox();
+  const entry = { method, path, body, at: new Date().toISOString().replace('T', ' ').slice(0, 19) };
+  // Nytt pass utan server: ge det ett tillfälligt id som byts mot det riktiga vid synk
+  if (method === 'POST' && /\/sessions$/.test(path)) entry.tmp = 'off-' + Date.now();
+  box.push(entry); store.set(OUTBOX, box); setOffline(true);
+  if (entry.tmp) return { id: entry.tmp, offline: true };
+  return { ok: true, queued: true, pr: [] };
+}
+let flushing = null;
+async function flushOutbox() {
+  if (flushing) return flushing;
+  flushing = (async () => {
+    let box = outbox();
+    while (box.length) {
+      const e = box[0];
+      let res;
+      try {
+        res = await fetch('/api' + resolveTmp(e.path), { method: e.method, headers: e.body ? { 'Content-Type': 'application/json' } : {}, body: e.body ? JSON.stringify(e.body) : undefined });
+      } catch { setOffline(true); return false; }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && e.tmp && data.id) {
+        const m = tmpMap(); m[e.tmp] = data.id; store.set('tmpIds', m);
+        if (location.hash === `#/pass/${e.tmp}`) location.replace(`#/pass/${data.id}`);
+      }
+      box = outbox().slice(1); store.set(OUTBOX, box);
+      setOffline(false);
+    }
+    setOffline(false);
+    return true;
+  })().finally(() => { flushing = null; });
+  return flushing;
+}
+window.addEventListener('online', () => flushOutbox());
+setInterval(() => { if (outbox().length) flushOutbox(); }, 30000);
+
 async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    method: opts.method || 'GET',
-    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  const method = opts.method || 'GET';
+  const canQueue = method !== 'GET' && QUEUEABLE.some(re => re.test(path));
+  // Ligger det redan ändringar i kön skickas de först, så att ordningen behålls
+  if (canQueue && outbox().length && !(await flushOutbox())) return queueWrite(method, path, opts.body);
+  let res;
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+  try {
+    res = await fetch('/api' + resolveTmp(path), {
+      method,
+      headers: opts.body ? { 'Content-Type': 'application/json' } : {},
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: ctl.signal,
+    });
+  } catch {
+    if (canQueue) return queueWrite(method, path, opts.body);
+    setOffline(true);
+    throw new Error(t('offlineError'));
+  } finally { clearTimeout(to); }
+  if (res.headers.get('x-homelift-cache') === 'miss') { setOffline(true); throw new Error(t('offlineError')); }
+  if (offline && res.headers.get('x-homelift-cache') !== 'hit') setOffline(false);
+  if (res.headers.get('x-homelift-cache') === 'hit') setOffline(true);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || t('error'));
   return data;
+}
+// Visa köade set i ett pass som laddats från cachen
+function mergeOutbox(s) {
+  for (const e of outbox()) {
+    const m = resolveTmp(e.path).match(/^\/sessions\/([\w-]+)\/(sets|rpe|finish|swap)$/);
+    if (!m || String(m[1]) !== String(s.id)) continue;
+    const it = s.items?.find(i => i.exerciseId === e.body?.exerciseId);
+    if (m[2] === 'finish') { s.finished_at = e.at; continue; }
+    if (!it) continue;
+    const i = it.logs.findIndex(l => l.set_no === e.body.setNo);
+    if (m[2] === 'sets' && e.method === 'PUT') { const log = { set_no: e.body.setNo, weight: e.body.weight, reps: e.body.reps, seconds: e.body.seconds, rpe: e.body.rpe }; if (i >= 0) it.logs[i] = log; else it.logs.push(log); }
+    if (m[2] === 'sets' && e.method === 'DELETE' && i >= 0) it.logs.splice(i, 1);
+    if (m[2] === 'rpe' && i >= 0) it.logs[i].rpe = e.body.rpe;
+  }
+  return s;
+}
+// Pass som startats utan kontakt med servern byggs av det sparade schemat
+function offlineSession(id) {
+  const e = outbox().find(x => x.tmp === id);
+  if (!e) throw new Error(t('offlineError'));
+  const b = e.body;
+  if (b.kind === 'cardio') return { id, kind: 'cardio', cardio_type: b.cardioType, duration_min: b.minutes, started_at: e.at, items: [] };
+  const p = (store.get('progCache') || []).find(x => x.id === b.programId);
+  const tp = p?.plan.templates[b.templateIndex];
+  if (!tp) throw new Error(t('offlineError'));
+  return mergeOutbox({ id, kind: 'strength', name: tp.name, started_at: e.at, quick: 0, offline: true, groups: [...new Set(tp.items.map(i => i.group).filter(Boolean))], items: tp.items.map((i, index) => ({ ...i, index, logs: [], suggestion: null })) });
 }
 function toast(msg) {
   document.querySelectorAll('.toast').forEach(x => x.remove());
@@ -139,6 +239,25 @@ async function notify(title, body) {
     const opts = { body, icon: '/icon-192.png', badge: '/icon-192.png', tag: 'homelift-rest', renotify: true, vibrate: [200, 100, 200], silent: !soundOn() };
     if (reg) await reg.showNotification(title, opts); else new Notification(title, opts);
   } catch {}
+}
+// Röstcoach: läser upp nästa övning och räknar ner vilan (talsyntes i webbläsaren)
+const voiceOn = () => store.get('voice') === true;
+function say(text) {
+  if (!voiceOn() || !text || !('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === 'sv' ? 'sv-SE' : 'en-US';
+    const v = speechSynthesis.getVoices().find(x => x.lang?.replace('_', '-').startsWith(lang === 'sv' ? 'sv' : 'en'));
+    if (v) u.voice = v;
+    u.rate = 1.02;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch {}
+}
+const kgWords = w => lang === 'sv' ? `${String(w).replace('.', ',')} kilo` : `${w} kilos`;
+function nextUpText(n) {
+  if (!n) return t('voiceLastSet');
+  const what = n.timed ? t('voiceSec', { n: n.reps }) : `${n.weight ? kgWords(n.weight) + ', ' : ''}${t('voiceReps', { n: n.reps })}`;
+  return t('voiceNext', { name: n.name, set: n.set, sets: n.sets, what });
 }
 let wakeLock = null;
 async function keepAwake(on) {
@@ -205,11 +324,12 @@ views.profil = async () => {
 // ---------- Hem ----------
 async function activeProgram() {
   const programs = await api(`/users/${user.id}/programs`);
+  store.set('progCache', programs);
   return { programs, active: programs.find(p => p.active) };
 }
-async function startStrength(programId, templateIndex, ongoing) {
+async function startStrength(programId, templateIndex, ongoing, quick) {
   if (ongoing && !confirm(t('ongoingConfirm'))) return;
-  const s = await api(`/users/${user.id}/sessions`, { method: 'POST', body: { programId, templateIndex } });
+  const s = await api(`/users/${user.id}/sessions`, { method: 'POST', body: { programId, templateIndex, quick: !!quick } });
   location.hash = `#/pass/${s.id}`;
 }
 async function startCardio(type, minutes, programId, ongoing) {
@@ -234,7 +354,7 @@ function cardioPicker(onPick, preset = {}) {
 
 views.home = async () => {
   setTab('home');
-  const [{ active }, sessions, sum] = await Promise.all([activeProgram(), api(`/users/${user.id}/sessions`), api(`/users/${user.id}/summary`)]);
+  const [{ active }, sessions, sum, mus] = await Promise.all([activeProgram(), api(`/users/${user.id}/sessions`), api(`/users/${user.id}/summary`), api(`/users/${user.id}/muscles`).catch(() => null)]);
   const ongoing = sessions.find(s => !s.finished_at);
   if (!active) {
     app.innerHTML = `<div class="card empty"><img src="/icon.svg" alt=""><h1>${t('hi', { name: esc(user.name) })}</h1><p class="muted">${t('noProgram')}</p><a class="btn" href="#/ny">${t('createProgram')}</a></div>`;
@@ -252,17 +372,20 @@ views.home = async () => {
   if (today && !today.done) {
     hero = today.kind === 'cardio'
       ? `<div class="card hero"><div class="eyebrow">${t('today')} · ${t('cardio')}</div><h1 style="margin:.3rem 0">${esc(cardioName(today.cardio_type))}</h1><p class="muted">${t('approxMin', { n: today.minutes })}</p><button class="btn block" id="heroStart" style="margin-top:10px">${icon('play', 'sm')}${t('startCardio')}</button></div>`
-      : `<div class="card hero"><div class="eyebrow">${t('today')} · ${t('strength')}</div><h1 style="margin:.3rem 0">${esc(tplName(today.name))}</h1><p class="muted">${t('exercisesCount', { n: today.exercises })} · ${t('approxMin', { n: today.minutes })}</p><button class="btn block" id="heroStart" style="margin-top:10px">${icon('play', 'sm')}${t('startWorkout')}</button></div>`;
+      : `<div class="card hero"><div class="eyebrow">${t('today')} · ${t('strength')}</div><h1 style="margin:.3rem 0">${esc(tplName(today.name))}</h1><p class="muted">${t('exercisesCount', { n: today.exercises })} · ${t('approxMin', { n: today.minutes })}</p><button class="btn block" id="heroStart" style="margin-top:10px">${icon('play', 'sm')}${t('startWorkout')}</button>
+        <button class="btn ghost block" id="heroQuick" style="margin-top:8px">${icon('bolt', 'sm')}${t('quickWorkout')}</button></div>`;
   } else {
     hero = `<div class="card"><div class="row"><span class="pill ${today?.done ? 'ok' : 'neutral'}">${today?.done ? icon('check', 'sm') + t('doneToday') : t('restDay')}</span></div>
       <p class="muted small" style="margin-top:8px">${t('restDayText', { date: nextDate })}</p>
       <hr class="divider"><div class="eyebrow">${t('nextWorkout')}</div>
       <div class="row between" style="margin-top:4px"><div><h3>${esc(tplName(next.name))}</h3><div class="muted small">${t('exercisesCount', { n: next.exercises })} · ${t('approxMin', { n: next.minutes })}</div></div>
-      <button class="btn secondary sm" id="heroStart">${t('start')}</button></div></div>`;
+      <button class="btn secondary sm" id="heroStart">${t('start')}</button></div>
+      <button class="btn ghost block" id="heroQuick" style="margin-top:10px">${icon('bolt', 'sm')}${t('quickWorkout')}</button></div>`;
   }
   app.innerHTML = `
     <h1>${t('hi', { name: esc(user.name) })}</h1>
     ${ongoing ? `<a class="card link" href="#/pass/${ongoing.id}" style="border-color:var(--warn)"><span class="pill warn">${t('ongoing')}</span><h3 style="margin-top:8px">${esc(sessionName(ongoing))}</h3><p class="muted small">${t('startedAt', { date: dateFmt(ongoing.started_at).replace(/\.$/, '') })}</p></a>` : ''}
+    ${adviceCard(mus)}
     ${hero}
     <div class="card">
       <div class="row between"><span class="eyebrow">${t('thisWeek')}</span><span class="small ${sum.weekly_goal_reached ? '' : 'muted'}" style="${sum.weekly_goal_reached ? 'color:var(--ok);font-weight:700' : ''}">${sum.weekly_goal_reached ? icon('check', 'sm') + ' ' : ''}${t('weekGoalProgress', { done: sum.sessions_this_week, goal })}</span></div>
@@ -281,15 +404,26 @@ views.home = async () => {
       <p class="muted small" style="margin:0">${tp.items.map(it => esc(exName(it.exercise))).slice(0, 3).join(', ')}${tp.items.length > 3 ? '…' : ''}</p></div>
       <button class="btn secondary sm" data-start="${i}">${t('start')}</button></div></div>`).join('')}
     <h2>${t('recent')}</h2>
-    ${sessions.filter(s => s.finished_at).slice(0, 5).map(s => `<a class="card link row between" href="#/pass/${s.id}"><div class="row"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon(s.kind === 'cardio' ? 'heart' : 'dumbbell')}</span><div><b>${esc(sessionName(s))}</b><div class="muted small">${dateFmt(s.started_at)} · ${s.kind === 'cardio' ? `${fmt(s.duration_min, 0)} ${t('min')}${s.distance_km ? ` · ${fmt(s.distance_km)} ${t('km')}` : ''}` : t('setsAndVolume', { sets: s.set_count, volume: fmt(s.volume, 0) })}</div></div></div>${icon('arrow', 'sm')}</a>`).join('') || `<p class="muted">${t('noneLogged')}</p>`}`;
+    ${sessions.filter(s => s.finished_at).slice(0, 5).map(s => `<a class="card link row between" href="#/pass/${s.id}"><div class="row"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon(s.kind === 'cardio' ? 'heart' : 'dumbbell')}</span><div><b>${esc(sessionName(s))}</b><div class="muted small">${dateFmt(s.started_at)} · ${s.kind === 'cardio' ? `${fmt(s.duration_min, 0)} ${t('min')}${s.distance_km ? ` · ${fmt(s.distance_km)} ${t('km')}` : ''}` : t('setsAndVolume', { sets: s.set_count, volume: fmt(s.volume, 0) })}</div></div></div>${icon('arrow', 'sm chev')}</a>`).join('') || `<p class="muted">${t('noneLogged')}</p>`}`;
   $('#heroStart').onclick = () => {
     const w = today && !today.done ? today : next;
     if (w.kind === 'cardio') startCardio(w.cardio_type, w.minutes, active.id, ongoing);
     else startStrength(active.id, w.template_index, ongoing);
   };
+  $('#heroQuick').onclick = () => startStrength(active.id, (today && !today.done && today.kind === 'strength' ? today : next).template_index, ongoing, true);
   $('#logCardio').onclick = () => cardioPicker(c => startCardio(c.type, c.minutes, active.id, ongoing));
   app.querySelectorAll('[data-start]').forEach(b => b.onclick = () => startStrength(active.id, Number(b.dataset.start), ongoing));
 };
+
+// Råd om vila utifrån vilka muskler som hunnit återhämta sig
+function adviceCard(mus) {
+  const a = mus?.advice;
+  if (!a || a.type === 'ok') return '';
+  const names = (a.muscles || []).slice(0, 4).map(muscle).join(', ').toLowerCase();
+  const txt = a.type === 'rest' ? t('adviceRest', { n: a.days }) : a.type === 'cardio' ? t('adviceCardio', { m: names }) : t('advicePartial', { m: names });
+  return `<div class="card advice ${a.type === 'partial' ? '' : 'warn'}"><div class="row" style="align-items:flex-start">${icon(a.type === 'partial' ? 'info' : 'bed')}<div class="grow"><b>${t(a.type === 'partial' ? 'adviceTitlePartial' : 'adviceTitle')}</b><p class="small" style="margin:4px 0 0">${esc(txt)}</p></div></div>
+    <a class="small" href="#/statistik/muskler">${t('seeRecovery')}</a></div>`;
+}
 
 // ---------- Guide för nytt schema ----------
 const GROUP_KEYS = ['brost', 'rygg', 'axlar', 'biceps', 'triceps', 'ben', 'mage'];
@@ -391,7 +525,7 @@ function templateCard(tp, ti, editable) {
   return `<div class="card"><h3>${esc(tplName(tp.name))}</h3>
     ${tp.items.map((it, i) => `
       <div class="ex-row">
-        <img class="thumb" src="${img(it.exercise)}" alt="" loading="lazy">
+        ${thumb(it.exercise)}
         <a class="grow" href="#/ovning/${encodeURIComponent(it.exerciseId)}" style="color:inherit;text-decoration:none">
           <b>${esc(exName(it.exercise))}</b>
           <div class="muted small">${itemScheme(it)} · ${esc(t('groups')[it.group] || '')}</div>
@@ -445,7 +579,7 @@ views.schema = async () => {
     const [ti, i] = b.dataset.swap.split(':').map(Number);
     const alts = await api(`/programs/${active.id}/alternatives?t=${ti}&i=${i}`);
     const d = modal(`<h3>${t('swapTitle', { name: esc(exName(active.plan.templates[ti].items[i].exercise)) })}</h3>
-      ${alts.length ? alts.map(a => `<div class="ex-row"><img class="thumb" src="${img(a)}" alt="" loading="lazy"><div class="grow"><b>${esc(exName(a))}</b><div class="muted small">${esc(equip(a.equipment))} · ${a.primaryMuscles.map(muscle).join(', ')}</div></div><button class="btn secondary sm" data-pick="${esc(a.id)}">${t('choose')}</button></div>`).join('') : `<p class="muted">${t('noAlternatives')}</p>`}
+      ${alts.length ? alts.map(a => `<div class="ex-row">${thumb(a)}<div class="grow"><b>${esc(exName(a))}</b><div class="muted small">${esc(equip(a.equipment))} · ${a.primaryMuscles.map(muscle).join(', ')}</div></div><button class="btn secondary sm" data-pick="${esc(a.id)}">${t('choose')}</button></div>`).join('') : `<p class="muted">${t('noAlternatives')}</p>`}
       <button class="btn ghost block" data-close style="margin-top:12px">${t('cancel')}</button>`);
     d.querySelectorAll('[data-pick]').forEach(p => p.onclick = async () => {
       await api(`/programs/${active.id}/swap`, { method: 'POST', body: { t: ti, i, exerciseId: p.dataset.pick } });
@@ -569,6 +703,7 @@ function runSteps(steps, { title, onDone, getReady = 5 } = {}) {
     idx++;
     if (idx >= all.length) { finish(); return; }
     left = all[idx].seconds; beep(all[idx].prep ? 660 : 990, 250); navigator.vibrate?.(200); draw();
+    say(all[idx].prep ? all[idx].desc : `${all[idx].name}. ${t('voiceSec', { n: Math.round(all[idx].seconds) })}`);
   };
   const tick = () => {
     const now = Date.now(), dt = (now - lastTick) / 1000; lastTick = now;
@@ -590,23 +725,28 @@ function runSteps(steps, { title, onDone, getReady = 5 } = {}) {
   $('#rstop', d).onclick = () => finish(false);
   runner = { stop: (silent) => { if (runner) { runner = null; clearInterval(iv); keepAwake(false); if (!silent) onDone?.(Math.round(activeSeconds), true); } } };
   draw(); beep(660, 120);
+  say(getReady ? `${t('getReady')}. ${steps[0]?.name || ''}` : steps[0]?.name);
   iv = setInterval(tick, 200);
 }
 
 // ---------- Pass-läge ----------
 views.pass = async id => {
   setTab('home');
-  const s = await api(`/sessions/${id}`);
+  const s = String(id).startsWith('off-') && !tmpMap()[id] ? offlineSession(id) : mergeOutbox(await api(`/sessions/${resolveTmp(id)}`));
+  if (tmpMap()[id]) { location.replace(`#/pass/${tmpMap()[id]}`); return; }
   if (s.kind === 'cardio') return cardioView(s);
   const done = !!s.finished_at;
   const started = parseDate(s.started_at);
   const prefs = user.prefs || { warmup: true, stretch: true };
   const groups = s.groups?.length ? s.groups : GROUP_KEYS;
+  const quick = !!s.quick;
   app.innerHTML = `
-    <div class="row between"><h1 class="grow">${esc(tplName(s.name))}</h1>${done ? `<span class="pill ok">${icon('check', 'sm')}${t('finished')}</span>` : `<span class="pill neutral" id="elapsed"></span>`}</div>
-    ${!done && prefs.warmup ? mobilityCard('warmup', groups) : ''}
+    <div class="row between"><h1 class="grow">${quick ? `${t('quickShort')}: ` : ''}${esc(tplName(s.name))}</h1>
+      ${done ? `<span class="pill ok">${icon('check', 'sm')}${t('finished')}</span>` : `<button class="icon-btn voice-btn ${voiceOn() ? 'on' : ''}" id="voiceBtn" aria-label="${t('voiceCoach')}" title="${t('voiceCoach')}">${icon('voice')}</button><span class="pill neutral" id="elapsed"></span>`}</div>
+    ${quick && !done ? `<div class="hint">${icon('bolt')}<span>${t('quickHint')}</span></div>` : ''}
+    ${!done && prefs.warmup && !quick ? mobilityCard('warmup', groups) : ''}
     ${s.items.map((it, xi) => exCard(it, xi, done, s.items[xi - 1])).join('')}
-    ${!done && prefs.stretch ? mobilityCard('stretch', groups) : ''}
+    ${!done && prefs.stretch && !quick ? mobilityCard('stretch', groups) : ''}
     ${done ? `${s.note ? `<div class="card"><b>${t('noteFinished')}:</b> ${esc(s.note)}</div>` : ''}<button class="btn danger block" id="del">${icon('trash', 'sm')}${t('deleteWorkout')}</button>`
       : `<div class="card stack"><textarea id="note" rows="2" placeholder="${t('notePlaceholder')}"></textarea><button class="btn block" id="finish">${icon('check', 'sm')}${t('finishWorkout')}</button></div>
          <button class="btn danger block" id="del">${t('abortWorkout')}</button>`}`;
@@ -615,6 +755,46 @@ views.pass = async id => {
     const iv = setInterval(tick, 15000); tick();
   }
   app.querySelectorAll('[data-guided]').forEach(b => b.onclick = () => runSteps(guidedSteps(b.dataset.guided, groups), { title: t(b.dataset.guided), getReady: 5 }));
+  $('#voiceBtn')?.addEventListener('click', e => {
+    store.set('voice', !voiceOn()); e.currentTarget.classList.toggle('on', voiceOn());
+    toast(t(voiceOn() ? 'voiceOn' : 'voiceOff'));
+    if (voiceOn()) say(firstUp());
+  });
+  // Röstcoach: vad som väntar härnäst
+  const setInfo = (xi, setNo) => {
+    const it = s.items[xi]; if (!it) return null;
+    const row = app.querySelector(`[data-set="${xi}:${setNo}"]`);
+    return { name: exName(it.exercise), set: setNo, sets: it.sets, timed: it.timed, weight: Number(row?.querySelector('[name=w]')?.value) || 0, reps: row?.querySelector('[name=r]')?.value || (it.timed ? it.secMax : it.repsMax) };
+  };
+  const firstUp = () => {
+    const xi = s.items.findIndex(it => it.logs.length < it.sets);
+    if (xi < 0) return t('voiceAllDone');
+    const it = s.items[xi];
+    return t('voiceFirst', { name: exName(it.exercise), scheme: it.timed ? t('voiceSchemeTimed', { sets: it.sets, sec: it.secMax }) : t('voiceScheme', { sets: it.sets, min: it.repsMin, max: it.repsMax }) });
+  };
+  if (!done && voiceOn() && !s.items.some(it => it.logs.length) && say.lastSession !== s.id) { say.lastSession = s.id; setTimeout(() => say(firstUp()), 600); }
+  // Byt övning bara i det här passet
+  app.querySelectorAll('[data-sswap]').forEach(b => b.onclick = async () => {
+    const xi = Number(b.dataset.sswap), it = s.items[xi];
+    const { original, alternatives: alts } = await api(`/sessions/${id}/alternatives?index=${it.index}`);
+    const row = a => `<div class="ex-row">${thumb(a)}<div class="grow"><b>${esc(exName(a))}</b><div class="muted small">${esc(equip(a.equipment))} · ${a.primaryMuscles.map(muscle).join(', ')}</div></div><button class="btn secondary sm" data-pick="${esc(a.id)}">${t('choose')}</button></div>`;
+    const d = modal(`<h3>${t('swapInWorkout', { name: esc(exName(it.exercise)) })}</h3><p class="muted small">${t('swapInWorkoutHint')}</p>
+      ${original ? `<div class="eyebrow" style="margin-top:10px">${t('backToOriginal')}</div>${row(original)}<hr class="divider">` : ''}
+      ${alts.length ? alts.map(row).join('') : `<p class="muted">${t('noAlternatives')}</p>`}
+      <button class="btn ghost block" data-close style="margin-top:12px">${t('cancel')}</button>`);
+    d.querySelectorAll('[data-pick]').forEach(pk => pk.onclick = async () => {
+      await api(`/sessions/${id}/swap`, { method: 'POST', body: { index: it.index, exerciseId: pk.dataset.pick } });
+      d.close(); toast(t('swappedTo', { name: exName(alts.concat(original || []).find(a => a.id === pk.dataset.pick)) })); render.keepScroll = true; render();
+    });
+  });
+  // Ansträngning per set
+  app.querySelectorAll('[data-rpe] button').forEach(b => b.onclick = async () => {
+    const box = b.closest('[data-rpe]'), [xi, setNo] = box.dataset.rpe.split(':').map(Number), it = s.items[xi];
+    const v = b.classList.contains('on') ? null : Number(b.dataset.v);
+    box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b && v != null));
+    await api(`/sessions/${id}/rpe`, { method: 'PUT', body: { exerciseId: it.exerciseId, setNo, rpe: v } });
+    const log = it.logs.find(l => l.set_no === setNo); if (log) log.rpe = v;
+  });
 
   const shownPr = {};
   async function logSet(btn, xi, setNo, value) {
@@ -624,6 +804,8 @@ views.pass = async id => {
     const body = it.timed ? { exerciseId: it.exerciseId, setNo, seconds: value } : { exerciseId: it.exerciseId, setNo, weight: w, reps: value };
     const res = await api(`/sessions/${id}/sets`, { method: 'PUT', body });
     btn.classList.add('done'); btn.innerHTML = icon('check');
+    if (!it.logs.some(l => l.set_no === setNo)) it.logs.push({ set_no: setNo, weight: w, reps: value });
+    app.querySelector(`[data-rpe="${xi}:${setNo}"]`)?.removeAttribute('hidden');
     // Personbästa: fira en gång per övning och typ (igen bara om det slås en gång till)
     const fresh = (res.pr || []).filter(p => { const k = it.exerciseId + p.type; if (shownPr[k] >= p.value) return false; shownPr[k] = p.value; return true; });
     if (fresh.length) celebrate(fresh[0], it);
@@ -640,10 +822,13 @@ views.pass = async id => {
       const nextCard = app.querySelectorAll('.ex-card')[xi + 1];
       nextCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       toast(t('supersetGo', { name: exName(s.items[xi + 1].exercise) }));
+      say(t('voiceSuperset', { name: exName(s.items[xi + 1].exercise) }));
       return;
     }
     let first = xi; while (first > 0 && s.items[first - 1].linkNext) first--;
-    startTimer(it.rest, first < xi ? exName(s.items[first].exercise) : (setNo < it.sets ? exName(it.exercise) : exName(s.items[xi + 1]?.exercise)));
+    // Nästa set: samma övning (eller första i supersetet) eller nästa övning
+    const nextUp = first < xi ? (setNo < s.items[first].sets ? setInfo(first, setNo + 1) : setInfo(xi + 1, 1)) : setNo < it.sets ? setInfo(xi, setNo + 1) : setInfo(xi + 1, 1);
+    startTimer(it.rest, first < xi ? exName(s.items[first].exercise) : (setNo < it.sets ? exName(it.exercise) : exName(s.items[xi + 1]?.exercise)), nextUp);
   }
   // Fyll i förslaget i alla set som inte är loggade
   app.querySelectorAll('[data-apply]').forEach(b => b.onclick = () => {
@@ -669,6 +854,8 @@ views.pass = async id => {
       await api(`/sessions/${id}/sets`, { method: 'DELETE', body: { exerciseId: it.exerciseId, setNo } });
       btn.classList.remove('done'); btn.innerHTML = icon('circle');
       btn.closest('.ex-card').classList.remove('complete');
+      app.querySelector(`[data-rpe="${xi}:${setNo}"]`)?.setAttribute('hidden', '');
+      it.logs = it.logs.filter(l => l.set_no !== setNo);
       return;
     }
     const r = row.querySelector('[name=r]').value;
@@ -706,7 +893,8 @@ views.pass = async id => {
 function setRow(it, xi, n, log, done) {
   const sug = it.suggestion;
   const last = sug?.lastSets?.find(l => l.set_no === n);
-  const prevRow = last ? `<div class="prev">${t('lastShort')}: ${esc(lastSetTxt(it, last))}</div>` : '';
+  const prevRow = (last ? `<div class="prev">${t('lastShort')}: ${esc(lastSetTxt(it, last))}${last.rpe ? ` · ${esc(rpeLabel(last.rpe))}` : ''}</div>` : '')
+    + (done ? (log?.rpe ? `<div class="prev">${esc(rpeLabel(log.rpe))}</div>` : '') : `<div class="rpe" data-rpe="${xi}:${n}" ${log ? '' : 'hidden'}><span>${t('howHard')}</span>${RPE.map(([v, k]) => `<button type="button" data-v="${v}" class="${log?.rpe === v ? 'on' : ''}">${t(k)}</button>`).join('')}</div>`);
   if (it.timed) {
     const v = log?.seconds ?? (sug?.seconds || '');
     return `<div class="set-no">${n}</div>
@@ -725,6 +913,9 @@ function setRow(it, xi, n, log, done) {
       <button class="check ${log ? 'done' : ''}" ${done ? 'disabled' : ''} aria-label="${t('done')} ${n}">${icon(log ? 'check' : 'circle')}</button>
     </div>${prevRow}`;
 }
+
+const RPE = [[7, 'rpeEasyL'], [8, 'rpeOkL'], [9, 'rpeHardL'], [10, 'rpeMaxL']];
+const rpeLabel = v => t(RPE.find(([x]) => x >= v)?.[1] || 'rpeMaxL').toLowerCase();
 
 // ---------- Personbästa ----------
 function celebrate(pr, it) {
@@ -789,10 +980,12 @@ function exCard(it, xi, done, prev) {
   const barbell = !it.timed && it.exercise.equipment === 'barbell';
   return `<div class="card ex-card ${complete ? 'complete' : ''} ${it.linkNext ? 'linked' : ''} ${prev?.linkNext ? 'linked-prev' : ''}">
     ${inSuperset ? `<div class="eyebrow" style="color:var(--brand);margin-bottom:6px">${icon('link', 'sm')} ${t('superset')}</div>` : ''}
-    <div class="row"><img class="thumb" src="${img(it.exercise)}" alt="" loading="lazy">
+    <div class="row">${thumb(it.exercise)}
       <div class="grow"><a href="#/ovning/${encodeURIComponent(it.exerciseId)}" style="color:inherit;text-decoration:none"><b>${esc(exName(it.exercise))}</b></a>
       <div class="muted small">${itemScheme(it)}</div></div>${it.timed ? `<span class="pill">${icon('clock', 'sm')}</span>` : ''}
-      ${barbell && !done ? `<button class="btn ghost sm" data-plates="${xi}" aria-label="${t('plateCalc')}" title="${t('plateCalc')}">${icon('plates', 'sm')}</button>` : ''}</div>
+      ${barbell && !done ? `<button class="btn ghost sm" data-plates="${xi}" aria-label="${t('plateCalc')}" title="${t('plateCalc')}">${icon('plates', 'sm')}</button>` : ''}
+      ${!done && it.index != null && !it.logs.length ? `<button class="btn ghost sm" data-sswap="${xi}" aria-label="${t('swapInWorkoutBtn')}" title="${t('swapInWorkoutBtn')}">${icon('swap', 'sm')}</button>` : ''}</div>
+    ${it.swappedFrom ? `<div class="muted small" style="margin-top:6px">${icon('swap', 'sm')} ${t('swappedFrom', { name: esc(SVN[it.swappedFrom] || it.swappedFromName || '') })}</div>` : ''}
     ${!done && sug ? `<div class="hint ${sug.deload ? 'warn' : ''}">${icon(sug.deload ? 'info' : sug.increase ? 'trend' : 'info')}<div class="grow"><span>${esc(reason || t('keepGoing'))}</span>
       ${target ? `<div class="row between" style="margin-top:6px"><b>${t('suggestion')}: ${esc(target)}</b><button class="btn secondary sm" data-apply="${xi}">${t('useSuggestion')}</button></div>` : ''}</div></div>` : ''}
     <div class="set-grid ${it.timed ? 'timed' : ''}"><div class="hdr">${t('colSet')}</div>${it.timed ? `<div class="hdr">${t('colSec')}</div><div></div>` : `<div class="hdr">${t('colKg')}</div><div class="hdr">${t('colReps')}</div>`}<div></div>${rows}</div>
@@ -838,16 +1031,17 @@ function cardioView(s) {
 
 // ---------- Vilotimer ----------
 let timerIv = null;
-function startTimer(sec, nextName) {
+function startTimer(sec, nextName, nextUp, resumed) {
   stopTimer();
-  if (!sec) return;
+  if (!sec) { say(nextUpText(nextUp)); return; }
+  if (!resumed) say(`${t('voiceRest', { n: sec })} ${nextUpText(nextUp)}`);
   const el = $('#timer');
   const total = sec, end = Date.now() + sec * 1000;
   el.hidden = false;
   el.innerHTML = `${icon('clock')}<div class="lbl">${t('restTimer')}${nextName ? `<small>${esc(t('upNext', { name: nextName }))}</small>` : ''}</div><span class="t"></span>
     <button id="tsound" aria-label="${t('soundSetting')}" title="${t('soundSetting')}" style="opacity:${soundOn() ? 1 : .45}">${icon('sound', 'sm')}</button>
     <button id="tplus">${t('plus30')}</button><button id="tstop">${t('done')}</button><span class="bar"></span>`;
-  $('#tplus').onclick = () => startTimer(Math.max(0, Math.round((end - Date.now()) / 1000)) + 30, nextName);
+  $('#tplus').onclick = () => startTimer(Math.max(0, Math.round((end - Date.now()) / 1000)) + 30, nextName, nextUp, true);
   $('#tstop').onclick = stopTimer;
   $('#tsound').onclick = e => { store.set('sound', !soundOn()); e.currentTarget.style.opacity = soundOn() ? 1 : .45; toast(t(soundOn() ? 'soundOn' : 'soundOff')); };
   let lastLeft = null;
@@ -857,9 +1051,11 @@ function startTimer(sec, nextName) {
     lastLeft = left;
     $('.t', el).textContent = fmtTime(left);
     $('.bar', el).style.width = `${100 * (1 - left / total)}%`;
+    if (left === 10 && total > 15) say(t('voiceTen'));
     if (left <= 3 && left > 0) beep(660, 80);
     if (left === 0) {
       stopTimer(); beep(990, 300); navigator.vibrate?.([200, 100, 200]); toast(t('nextSet'));
+      say(nextUp ? t('voiceGo', { name: nextUp.name }) : t('voiceGoShort'));
       notify(t('restOver'), nextName ? t('upNext', { name: nextName }) : t('nextSet'));
     }
   };
@@ -887,7 +1083,8 @@ views.ovning = async id => {
   const v = ex.video;
   const media = v
     ? `<video class="player" controls playsinline preload="metadata" src="${v.url}"></video>
-       <p class="muted small">${icon('check', 'sm')} ${t('localVideo')} · ${t('videoSource', { title: esc(v.title || ''), channel: v.channel ? ' · ' + esc(v.channel) : '' })}</p>`
+       <div class="saved-box">${icon('check')}<div class="grow"><b>${t('savedOnServer')}</b><div class="small">${t('savedOnServerHint')}${v.title ? ` · ${esc(v.title)}${v.channel ? ' · ' + esc(v.channel) : ''}` : ''}</div></div>
+         <button class="btn sm" id="vdel">${icon('trash', 'sm')}${t('removeVideoShort')}</button></div>`
     : `<div id="embedBox">${ex.embed ? embedHtml(ex.embed) : `${ex.images?.length ? `<div class="anim">${ex.images.slice(0, 2).map((_, i) => `<img src="${img(ex, i)}" alt="">`).join('')}</div>` : ''}<p class="muted small" id="embedMsg">${t('findingVideo')}</p>`}</div>`;
   app.innerHTML = `
     <a href="javascript:history.back()" class="small row" style="gap:4px;text-decoration:none">${icon('arrow', 'sm')}${t('back')}</a>
@@ -903,21 +1100,23 @@ views.ovning = async id => {
       </div>
       <p><b>${t('primary')}:</b> ${ex.primaryMuscles.map(muscle).join(', ')}${ex.secondaryMuscles.filter(m => !ex.primaryMuscles.includes(m)).length ? `<br><b>${t('secondary')}:</b> ${ex.secondaryMuscles.filter(m => !ex.primaryMuscles.includes(m)).map(muscle).join(', ')}` : ''}</p>
       ${ex.equipment === 'barbell' ? `<button class="btn ghost block" id="plates" style="margin-bottom:8px">${icon('plates', 'sm')}${t('plateCalc')}</button>` : ''}
-      <details class="mob"><summary class="small">${t('videoOptions')}</summary>
+      ${ex.custom ? `<div class="row" style="gap:8px;margin-bottom:8px"><button class="btn ghost grow" id="cedit">${icon('edit', 'sm')}${t('editCustom')}</button><button class="btn danger" id="cdel" aria-label="${t('remove')}">${icon('trash', 'sm')}</button></div>` : ''}
+      <button class="btn ghost block" id="addToProg" style="margin-bottom:8px">${icon('plus', 'sm')}${t('addToProgram')}</button>
+      ${v ? '' : `<details class="mob"><summary class="small">${t('videoOptions')}</summary>
         <div class="stack" style="margin-top:10px">
-          ${v ? `<button class="btn ghost block" id="vdel">${icon('trash', 'sm')}${t('removeVideo')}</button>`
-            : `<button class="btn secondary block" id="vdl">${icon('download', 'sm')}${t('downloadVideo')}</button>
-               <label class="btn ghost block" style="cursor:pointer">${icon('upload', 'sm')}${t('uploadVideo')}<input type="file" accept="video/mp4,video/*" id="vup" hidden></label>`}
+          <button class="btn secondary block" id="vdl">${icon('download', 'sm')}${t('downloadVideo')}</button>
+          <label class="btn ghost block" style="cursor:pointer">${icon('upload', 'sm')}${t('uploadVideo')}<input type="file" accept="video/mp4,video/*" id="vup" hidden></label>
           <button class="btn ghost block" id="vpick">${icon('link', 'sm')}${t('chooseVideo')}</button>
           <a class="btn ghost block" href="${videoSearchUrl(ex.name_en || ex.name)}" target="_blank" rel="noopener">${icon('external', 'sm')}${t('watchYoutube')}</a>
         </div>
         <p class="muted small">${t('embedNote')}</p>
-      </details>
+      </details>`}
       <p class="small" id="vstatus" style="margin-bottom:0"></p>
     </div>
+    ${rec?.points?.length ? progressBlock(rec.points) : ''}
     ${rec ? recordsBlock(rec) : ''}
     <div class="card"><h3>${t('howTo')}</h3>${!ex.translated && lang === 'sv' ? `<p class="muted small">${t('englishNote')}</p>` : ''}
-      <ol class="instructions">${ex.instructions.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+      ${ex.instructions.length ? `<ol class="instructions">${ex.instructions.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : `<p class="muted small">${t('noInstructions')}</p>`}</div>`;
   // Hitta en video att bädda in första gången övningen visas
   if (!v && !ex.embed) {
     api(`/exercises/${encodeURIComponent(ex.id)}/embed`).then(e => {
@@ -925,14 +1124,23 @@ views.ovning = async id => {
     }).catch(err => { if ($('#embedMsg')) $('#embedMsg').textContent = t('noEmbed', { err: err.message }); });
   }
   $('#plates')?.addEventListener('click', () => plateCalc(rec?.weight?.value || 60));
-  $('#vdel')?.addEventListener('click', async () => { await api(`/videos/${encodeURIComponent(ex.id)}`, { method: 'DELETE' }); render(); });
-  $('#vpick').onclick = () => {
+  $('#vdel')?.addEventListener('click', async () => {
+    if (!confirm(t('removeVideoConfirm'))) return;
+    await api(`/videos/${encodeURIComponent(ex.id)}`, { method: 'DELETE' }); toast(t('videoRemoved')); render.keepScroll = true; render();
+  });
+  $('#cedit')?.addEventListener('click', () => customForm(ex));
+  $('#cdel')?.addEventListener('click', async () => {
+    if (!confirm(t('removeCustomConfirm', { name: ex.name }))) return;
+    await api(`/custom-exercises/${encodeURIComponent(ex.id)}`, { method: 'DELETE' }); toast(t('removed')); location.hash = '#/ovningar';
+  });
+  $('#addToProg').onclick = () => addToProgram(ex);
+  $('#vpick') && ($('#vpick').onclick = () => {
     const d = modal(`<h3>${t('chooseVideo')}</h3><p class="muted small">${t('chooseVideoHint')}</p>
       <input type="url" id="vurl" placeholder="https://www.youtube.com/watch?v=…" value="${ex.embed?.custom ? `https://youtu.be/${esc(ex.embed.videoId)}` : ''}">
       <div class="wizard-nav">${ex.embed ? `<button class="btn ghost" id="vreset">${t('findNew')}</button>` : `<button class="btn ghost" data-close>${t('cancel')}</button>`}<button class="btn" id="vok">${t('save')}</button></div>`);
     $('#vok', d).onclick = async () => { try { await api(`/exercises/${encodeURIComponent(ex.id)}/embed`, { method: 'PUT', body: { url: $('#vurl', d).value } }); d.close(); render(); } catch (err) { toast(err.message); } };
     $('#vreset', d)?.addEventListener('click', async () => { await api(`/exercises/${encodeURIComponent(ex.id)}/embed`, { method: 'PUT', body: { url: '' } }); d.close(); render(); });
-  };
+  });
   $('#vdl')?.addEventListener('click', async e => {
     const btn = e.currentTarget;
     btn.disabled = true; $('#vstatus').textContent = t('videoDownloading'); $('#vstatus').style.color = '';
@@ -955,6 +1163,61 @@ views.ovning = async id => {
     if (r.ok) render(); else $('#vstatus').textContent = (await r.json().catch(() => ({}))).error || t('error');
   });
 };
+// Utveckling för en övning: uppskattat 1RM (eller tid/reps) över tid
+function progressBlock(points) {
+  const key = points.some(p => p.e1rm > 0) ? 'e1rm' : points.some(p => p.seconds > 0) ? 'seconds' : 'reps';
+  const unit = key === 'seconds' ? 's' : key === 'reps' ? t('reps') : 'kg';
+  const pts = points.filter(p => p[key] > 0);
+  if (!pts.length) return '';
+  const now = pts.at(-1)[key], first = pts[0][key], best = Math.max(...pts.map(p => p[key])), diff = now - first;
+  return `<div class="card"><div class="row"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('trend')}</span><div class="grow"><div class="muted small">${t(key === 'e1rm' ? 'estimated1rm' : key === 'seconds' ? 'longest' : 'mostReps')}</div>
+    <b style="font-size:1.4rem">${fmt(now)} ${unit}</b>${pts.length > 1 && diff ? ` <span class="pill ${diff > 0 ? 'ok' : 'warn'}">${diff > 0 ? '+' : ''}${fmt(diff)} ${unit}</span>` : ''}</div>
+    ${best > now ? `<div class="muted small" style="text-align:right">${t('bestEver')}<br><b>${fmt(best)} ${unit}</b></div>` : ''}</div>
+    ${pts.length > 1 ? `<p class="muted small">${t('sinceFirst', { date: dateFmt(pts[0].date, { day: 'numeric', month: 'short', year: 'numeric' }) })}</p>` : ''}
+    ${lineChart(pts, key, unit)}${key === 'e1rm' ? `<p class="muted small" style="margin-bottom:0">${t('e1rmExplain')}</p>` : ''}</div>`;
+}
+// Lägg till en övning sist i ett pass i det aktiva schemat
+async function addToProgram(ex) {
+  const { active } = await activeProgram();
+  if (!active) return toast(t('noProgram'));
+  const d = modal(`<h3>${t('addToProgram')}</h3><p class="muted small">${t('addToProgramHint', { name: esc(ex.name), program: esc(tplName(active.name)) })}</p>
+    ${active.plan.templates.map((tp, i) => `<button class="card link block" data-tpl="${i}" style="width:100%;text-align:left;font:inherit;cursor:pointer;margin:8px 0 0"><b>${esc(tplName(tp.name))}</b><div class="muted small">${t('exercisesCount', { n: tp.items.length })}</div></button>`).join('')}
+    <button class="btn ghost block" data-close style="margin-top:12px">${t('cancel')}</button>`);
+  d.querySelectorAll('[data-tpl]').forEach(b => b.onclick = async () => {
+    await api(`/programs/${active.id}/add`, { method: 'POST', body: { t: Number(b.dataset.tpl), exerciseId: ex.id } });
+    d.close(); toast(t('addedToProgram', { name: tplName(active.plan.templates[b.dataset.tpl].name) }));
+  });
+}
+// Skapa eller ändra en egen övning
+const EQUIP_KEYS = ['body only', 'dumbbell', 'barbell', 'e-z curl bar', 'kettlebells', 'cable', 'machine', 'bands', 'medicine ball', 'exercise ball', 'other'];
+function customForm(ex) {
+  const M = t('muscles');
+  const mus = Object.keys(M).sort((a, b) => M[a].localeCompare(M[b], L.locale));
+  const chk = (name, list) => `<div class="choices" style="grid-template-columns:repeat(2,1fr)">${mus.map(m => `<div class="choice"><input type="checkbox" name="${name}" id="${name}-${m.replace(' ', '_')}" value="${m}" ${list?.includes(m) ? 'checked' : ''}><label for="${name}-${m.replace(' ', '_')}" style="min-height:40px">${esc(M[m])}</label></div>`).join('')}</div>`;
+  const d = modal(`<h3>${ex ? t('editCustom') : t('newCustom')}</h3>
+    <form id="cform" class="stack" style="margin-top:12px">
+      <div><label class="field" for="cname">${t('name')}</label><input type="text" id="cname" maxlength="80" required value="${esc(ex?.name || '')}"></div>
+      <div class="row"><div class="grow"><label class="field" for="cequip">${t('equipmentLabel')}</label><select id="cequip">${EQUIP_KEYS.map(k => `<option value="${k}" ${(ex?.equipment || 'body only') === k ? 'selected' : ''}>${esc(equip(k))}</option>`).join('')}</select></div>
+        <div class="grow"><label class="field" for="clevel">${t('levelLabel')}</label><select id="clevel">${['beginner', 'intermediate', 'expert'].map(k => `<option value="${k}" ${(ex?.level || 'beginner') === k ? 'selected' : ''}>${esc(t('levelDb')[k] || k)}</option>`).join('')}</select></div></div>
+      <div><label class="field">${t('primary')}</label>${chk('cprim', ex?.primaryMuscles)}</div>
+      <details class="mob"><summary class="small">${t('secondary')}</summary>${chk('csec', ex?.secondaryMuscles)}</details>
+      <div class="setting" style="border-top:0"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('clock')}</span><div class="grow"><b>${t('measureTime')}</b><div class="muted small">${t('customTimedHint')}</div></div><label class="switch"><input type="checkbox" id="ctimed" ${ex?.timed ? 'checked' : ''}><span></span></label></div>
+      <div><label class="field" for="cinstr">${t('howTo')}</label><textarea id="cinstr" rows="4" placeholder="${t('customInstrHint')}">${esc((ex?.instructions || []).join('\n'))}</textarea></div>
+      <div><label class="field" for="cvideo">${t('customVideo')}</label><input type="url" id="cvideo" placeholder="https://www.youtube.com/watch?v=…" value="${ex?.embed?.custom ? `https://youtu.be/${esc(ex.embed.videoId)}` : ''}"></div>
+      <div class="wizard-nav"><button type="button" class="btn ghost" data-close>${t('cancel')}</button><button class="btn">${t('save')}</button></div>
+    </form>`);
+  $('#cform', d).onsubmit = async e => {
+    e.preventDefault();
+    const vals = n => [...d.querySelectorAll(`input[name=${n}]:checked`)].map(i => i.value);
+    const body = { name: $('#cname', d).value, equipment: $('#cequip', d).value, level: $('#clevel', d).value, primaryMuscles: vals('cprim'), secondaryMuscles: vals('csec'), timed: $('#ctimed', d).checked, instructions: $('#cinstr', d).value, videoUrl: $('#cvideo', d).value.trim() };
+    if (!body.primaryMuscles.length) return toast(t('pickMuscle'));
+    try {
+      const out = await api(ex ? `/custom-exercises/${encodeURIComponent(ex.id)}` : '/custom-exercises', { method: ex ? 'PUT' : 'POST', body });
+      d.close(); toast(t('saved'));
+      if (ex) { render.keepScroll = true; render(); } else location.hash = `#/ovning/${encodeURIComponent(out.id)}`;
+    } catch (err) { toast(err.message); }
+  };
+}
 function embedHtml(e) {
   return `<div class="player embed"><iframe src="${ytEmbed(e.videoId)}" title="${esc(e.title || 'YouTube')}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
     ${e.title ? `<p class="muted small">${esc(e.title)}</p>` : ''}`;
@@ -963,7 +1226,7 @@ function embedHtml(e) {
 // ---------- Övningsbibliotek ----------
 views.ovningar = async () => {
   setTab('library');
-  const state = store.get('libFilter') || { q: '', muscle: '', equipment: '' };
+  const state = { q: '', muscle: '', equipment: '', custom: false, ...(store.get('libFilter') || {}) };
   const M = t('muscles'), E = t('equipDb');
   app.innerHTML = `
     <h1>${t('tabs.library')}</h1>
@@ -971,14 +1234,19 @@ views.ovningar = async () => {
       <input type="search" id="q" placeholder="${t('searchPlaceholder')}" value="${esc(state.q)}">
       <div class="row"><select id="m"><option value="">${t('allMuscles')}</option>${Object.entries(M).sort((a, b) => a[1].localeCompare(b[1], L.locale)).map(([k, v]) => `<option value="${k}" ${state.muscle === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <select id="e"><option value="">${t('allEquipment')}</option>${Object.entries(E).map(([k, v]) => `<option value="${k}" ${state.equipment === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="row" style="gap:8px">${`<div class="seg grow" id="libSeg"><button type="button" data-v="0" class="${state.custom ? '' : 'on'}">${t('allExercises')}</button><button type="button" data-v="1" class="${state.custom ? 'on' : ''}">${t('myExercises')}</button></div>`}
+        <button class="btn secondary sm" id="newCustom">${icon('plus', 'sm')}${t('newCustomShort')}</button></div>
     </div>
     <div class="card" id="list"></div>`;
   let tm;
   const load = async () => {
     state.q = $('#q').value; state.muscle = $('#m').value; state.equipment = $('#e').value; store.set('libFilter', state);
-    const list = await api(`/exercises?q=${encodeURIComponent(state.q)}&muscle=${encodeURIComponent(state.muscle)}&equipment=${encodeURIComponent(state.equipment)}`);
-    $('#list').innerHTML = list.length ? list.map(a => `<a class="ex-row" href="#/ovning/${encodeURIComponent(a.id)}" style="color:inherit;text-decoration:none"><img class="thumb" src="${img(a)}" alt="" loading="lazy"><div class="grow"><b>${esc(exName(a))}</b><div class="muted small">${esc(equip(a.equipment || ''))} · ${a.primaryMuscles.map(muscle).join(', ')}</div></div>${a.video ? `<span class="pill">${icon('video', 'sm')}</span>` : ''}</a>`).join('') : `<p class="muted">${t('noHits')}</p>`;
+    const list = await api(`/exercises?q=${encodeURIComponent(state.q)}&muscle=${encodeURIComponent(state.muscle)}&equipment=${encodeURIComponent(state.equipment)}${state.custom ? '&custom=1' : ''}`);
+    $('#list').innerHTML = list.length ? list.map(a => `<a class="ex-row" href="#/ovning/${encodeURIComponent(a.id)}" style="color:inherit;text-decoration:none">${a.images?.length ? `${thumb(a)}` : `<span class="thumb icon-thumb">${icon('dumbbell')}</span>`}<div class="grow"><b>${esc(exName(a))}</b><div class="muted small">${a.custom ? `${t('customTag')} · ` : ''}${esc(equip(a.equipment || ''))} · ${a.primaryMuscles.map(muscle).join(', ')}</div></div>${a.video ? `<span class="pill ok" title="${t('savedOnServer')}">${icon('video', 'sm')}</span>` : ''}</a>`).join('')
+      : state.custom ? `<p class="muted">${t('noCustom')}</p>` : `<p class="muted">${t('noHits')}</p>`;
   };
+  app.querySelectorAll('#libSeg button').forEach(b => b.onclick = () => { state.custom = b.dataset.v === '1'; app.querySelectorAll('#libSeg button').forEach(x => x.classList.toggle('on', x === b)); load(); });
+  $('#newCustom').onclick = () => customForm(null);
   $('#q').oninput = () => { clearTimeout(tm); tm = setTimeout(load, 250); };
   $('#m').onchange = $('#e').onchange = load;
   load();
@@ -1028,9 +1296,9 @@ function bmiBlock(u) {
     <div class="row between muted small"><span>18,5</span><span>25</span><span>30</span></div>
     <p class="muted small">${t('bmiNote')}</p>`;
 }
-views.statistik = async () => {
+views.statistik = async (section) => {
   setTab('stats');
-  const [st, bw, ms] = await Promise.all([api(`/users/${user.id}/stats`), api(`/users/${user.id}/bodyweight`), api(`/users/${user.id}/measurements`), refreshUser()]);
+  const [st, bw, ms, mus, { active }] = await Promise.all([api(`/users/${user.id}/stats`), api(`/users/${user.id}/bodyweight`), api(`/users/${user.id}/measurements`), api(`/users/${user.id}/muscles`).catch(() => null), activeProgram().catch(() => ({})), refreshUser()]);
   const sel = store.get('statEx') && st.exercises.find(e => e.exercise.id === store.get('statEx')) ? store.get('statEx') : st.exercises[0]?.exercise.id;
   app.innerHTML = `
     <h1>${t('tabs.stats')}</h1>
@@ -1040,6 +1308,8 @@ views.statistik = async () => {
       <div class="stat"><b>${fmt(st.totalVolume / 1000)} t</b><span>${t('totalLifted')}</span></div>
       <div class="stat"><b>${fmt(st.cardioMinutes / 60)} h</b><span>${t('cardioTotal')}</span></div>
     </div>
+    <h2>${t('monthReport')}</h2><div class="card" id="reportCard"></div>
+    <h2 id="muskler">${t('muscleMap')}</h2><div class="card" id="muscleCard"></div>
     <h2>${t('perWeekChart')}</h2><div class="card">${barChart(st.weeks)}</div>
     <h2>${t('progressPerExercise')}</h2>
     <div class="card">
@@ -1059,17 +1329,116 @@ views.statistik = async () => {
     <div class="card" id="measCard"></div>
     <a class="btn ghost block" href="/api/users/${user.id}/export.csv" download>${icon('download', 'sm')}${t('export')}</a>`;
   drawMeasurements(ms);
+  drawReport(store.get('reportMonth'));
+  if (mus) drawMuscles(mus, active);
+  if (section === 'muskler') setTimeout(() => $('#muskler')?.scrollIntoView({ block: 'start' }), 50);
   const drawEx = () => {
     const id = $('#exSel').value; store.set('statEx', id);
     const e = st.exercises.find(x => x.exercise.id === id);
     const timed = e.points.some(p => p.seconds > 0);
     const hasWeight = e.points.some(p => p.e1rm > 0);
-    $('#exChart').innerHTML = timed ? `<p class="muted small" style="margin-top:0">${t('secondsLabel')}</p>${lineChart(e.points, 'seconds', 's')}`
-      : `<p class="muted small" style="margin-top:0">${hasWeight ? t('e1rmLabel') : t('noWeight')}</p>${hasWeight ? lineChart(e.points, 'e1rm', 'kg') : ''}`;
+    const pts = e.points.map(p => ({ ...p, e1rm: Math.round(p.e1rm * 10) / 10 }));
+    const mode = hasWeight && store.get('statMode') === 'weight' ? 'weight' : 'e1rm';
+    const key = timed ? 'seconds' : mode, vals = pts.filter(p => p[key] > 0);
+    const head = vals.length ? `<div class="row between" style="margin-bottom:6px"><div><b style="font-size:1.3rem">${fmt(vals.at(-1)[key])} ${timed ? 's' : 'kg'}</b>${vals.length > 1 && vals.at(-1)[key] !== vals[0][key] ? ` <span class="pill ${vals.at(-1)[key] > vals[0][key] ? 'ok' : 'warn'}">${vals.at(-1)[key] > vals[0][key] ? '+' : ''}${fmt(vals.at(-1)[key] - vals[0][key])}</span>` : ''}</div>
+      ${hasWeight && !timed ? `<div class="seg" id="modeSeg" style="width:auto"><button type="button" data-v="e1rm" class="${mode === 'e1rm' ? 'on' : ''}">1RM</button><button type="button" data-v="weight" class="${mode === 'weight' ? 'on' : ''}">${t('heaviestShort')}</button></div>` : ''}</div>` : '';
+    $('#exChart').innerHTML = timed ? `${head}<p class="muted small" style="margin-top:0">${t('secondsLabel')}</p>${lineChart(vals, 'seconds', 's')}`
+      : hasWeight ? `${head}<p class="muted small" style="margin-top:0">${mode === 'e1rm' ? t('e1rmLabel') : t('heaviestLabel')}</p>${lineChart(vals, key, 'kg')}` : `<p class="muted small" style="margin-top:0">${t('noWeight')}</p>`;
+    $('#exChart').querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { store.set('statMode', b.dataset.v); drawEx(); });
   };
   if ($('#exSel')) { $('#exSel').onchange = drawEx; drawEx(); }
   $('#bwForm').onsubmit = async ev => { ev.preventDefault(); user = await api(`/users/${user.id}/bodyweight`, { method: 'POST', body: { weight: ev.target.w.value } }); store.set('user', user); toast(t('saved')); render.keepScroll = true; render(); };
 };
+
+// ---------- Månadsrapport ----------
+async function drawReport(month) {
+  const card = $('#reportCard'); if (!card) return;
+  const r = await api(`/users/${user.id}/report${month ? `?month=${month}` : ''}`).catch(() => null);
+  if (!r || !$('#reportCard')) return;
+  const idx = r.months.indexOf(r.month);
+  const mName = m => new Date(m + '-15T12:00:00').toLocaleDateString(L.locale, { month: 'long', year: 'numeric' });
+  const delta = (a, b, unit = '') => b ? `<small class="${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${fmt(Math.abs(a - b), 1)}${unit}</small>` : '';
+  const prVal = p => p.type === 'seconds' ? `${p.value} s` : p.type === 'reps' ? `${p.value} ${t('reps')}` : `${fmt(p.value)} kg`;
+  const signed = v => `${v > 0 ? '+' : ''}${fmt(v)}`;
+  card.innerHTML = `
+    <div class="row between"><button class="btn ghost sm ic" id="rPrev" ${idx > 0 ? '' : 'disabled'} aria-label="${t('prevMonth')}">${icon('arrow', 'sm')}</button>
+      <b style="text-transform:capitalize">${esc(mName(r.month))}</b>
+      <button class="btn ghost sm ic" id="rNext" ${idx < r.months.length - 1 ? '' : 'disabled'} aria-label="${t('nextMonth')}" style="transform:scaleX(-1)">${icon('arrow', 'sm')}</button></div>
+    ${r.sessions ? `<div class="stats report" style="margin-top:12px">
+      <div class="stat"><b>${r.sessions}</b><span>${t('rWorkouts', { s: r.strength, c: r.cardio })}</span>${delta(r.sessions, r.previous.sessions)}</div>
+      <div class="stat"><b>${fmt(r.volume / 1000)} t</b><span>${t('totalLifted')}</span>${delta(r.volume / 1000, r.previous.volume / 1000, ' t')}</div>
+      <div class="stat"><b>${fmt(r.minutes / 60)} h</b><span>${t('rTime', { d: r.days })}</span>${delta(r.minutes / 60, r.previous.minutes / 60, ' h')}</div>
+      <div class="stat"><b>${r.prs.length}</b><span>${t('rRecords')}</span></div>
+    </div>
+    ${r.weight || Object.keys(r.measures).length ? `<div class="row wrap" style="margin-top:12px;gap:6px">${r.weight ? `<span class="pill ${r.weight.change <= 0 ? 'ok' : 'neutral'}">${t('weight').split(' (')[0]} ${signed(r.weight.change)} kg</span>` : ''}${Object.entries(r.measures).map(([k, v]) => `<span class="pill neutral">${esc(t('measureTypes')[k])} ${signed(v.change)} ${mUnit(k)}</span>`).join('')}</div>` : ''}
+    ${r.cardio ? `<p class="small" style="margin:12px 0 0">${icon('heart', 'sm')} ${t('rCardio', { n: r.cardio, min: fmt(r.cardioMinutes, 0) })}${r.km ? ` · ${fmt(r.km)} ${t('km')}` : ''}</p>` : ''}
+    ${r.prs.length ? `<hr class="divider"><div class="eyebrow">${t('rNewRecords')}</div>${r.prs.slice(0, 8).map(p => `<div class="ex-row" style="padding:6px 0">${icon('trophy', 'sm')}<div class="grow small"><b>${esc(exName(p.exercise))}</b> · ${t('prType')[p.type]} ${esc(prVal(p))}</div><span class="muted small">${dateFmt(p.date, { day: 'numeric', month: 'short' })}</span></div>`).join('')}${r.prs.length > 8 ? `<p class="muted small">${t('andMore', { n: r.prs.length - 8 })}</p>` : ''}` : ''}
+    ${r.topExercises.length ? `<hr class="divider"><div class="eyebrow">${t('rTop')}</div><p class="small" style="margin:4px 0 0">${r.topExercises.map(x => `${esc(exName(x.exercise))} (${x.sets})`).join(', ')}</p>` : ''}`
+    : `<p class="muted small" style="margin-bottom:0">${t('rEmpty')}</p>`}`;
+  $('#rPrev').onclick = () => { store.set('reportMonth', r.months[idx - 1]); drawReport(r.months[idx - 1]); };
+  $('#rNext').onclick = () => { store.set('reportMonth', r.months[idx + 1]); drawReport(r.months[idx + 1]); };
+}
+
+// ---------- Muskelkarta ----------
+// Förenklad kropp framifrån och bakifrån. Varje form hör till en muskel i övningsdatabasen.
+const BODY_FRONT = [
+  ['shoulders', 'e', 29, 44, 7, 6], ['shoulders', 'e', 71, 44, 7, 6],
+  ['chest', 'e', 41, 54, 9.5, 7], ['chest', 'e', 59, 54, 9.5, 7],
+  ['biceps', 'e', 25, 62, 4.5, 9], ['biceps', 'e', 75, 62, 4.5, 9],
+  ['forearms', 'e', 21, 84, 4, 10], ['forearms', 'e', 79, 84, 4, 10],
+  ['abdominals', 'r', 42, 63, 16, 30, 5],
+  ['abductors', 'e', 34, 104, 4, 7], ['abductors', 'e', 66, 104, 4, 7],
+  ['adductors', 'e', 46.5, 116, 3.5, 11], ['adductors', 'e', 53.5, 116, 3.5, 11],
+  ['quadriceps', 'e', 39.5, 126, 6.5, 19], ['quadriceps', 'e', 60.5, 126, 6.5, 19],
+  ['calves', 'e', 40, 166, 4.5, 12], ['calves', 'e', 60, 166, 4.5, 12],
+  ['neck', 'r', 46, 25, 8, 7, 3],
+];
+const BODY_BACK = [
+  ['traps', 'p', 'M50 27 L62 38 L56 50 L50 54 L44 50 L38 38 Z'],
+  ['shoulders', 'e', 29, 44, 7, 6], ['shoulders', 'e', 71, 44, 7, 6],
+  ['middle back', 'r', 43, 52, 14, 14, 3],
+  ['lats', 'p', 'M36 50 L43 54 L44 76 L38 72 Q34 62 36 50 Z'], ['lats', 'p', 'M64 50 L57 54 L56 76 L62 72 Q66 62 64 50 Z'],
+  ['lower back', 'r', 43, 72, 14, 18, 4],
+  ['triceps', 'e', 25, 62, 4.5, 9], ['triceps', 'e', 75, 62, 4.5, 9],
+  ['forearms', 'e', 21, 84, 4, 10], ['forearms', 'e', 79, 84, 4, 10],
+  ['glutes', 'e', 42, 103, 8.5, 9], ['glutes', 'e', 58, 103, 8.5, 9],
+  ['hamstrings', 'e', 40, 130, 6.5, 17], ['hamstrings', 'e', 60, 130, 6.5, 17],
+  ['calves', 'e', 40, 165, 5.5, 13], ['calves', 'e', 60, 165, 5.5, 13],
+];
+function bodySvg(shapes, fill, label) {
+  const base = `<circle cx="50" cy="14" r="9"/><rect x="45" y="21" width="10" height="10" rx="3"/><rect x="31" y="34" width="38" height="64" rx="12"/>
+    <rect x="18" y="38" width="12" height="58" rx="6"/><rect x="70" y="38" width="12" height="58" rx="6"/><rect x="31" y="92" width="18" height="90" rx="8"/><rect x="51" y="92" width="18" height="90" rx="8"/>`;
+  const sh = ([m, kind, ...a]) => {
+    const attrs = `class="mus" fill="${fill(m)}" data-mus="${m}"`;
+    const title = `<title>${esc(muscle(m))}</title>`;
+    if (kind === 'e') return `<ellipse cx="${a[0]}" cy="${a[1]}" rx="${a[2]}" ry="${a[3]}" ${attrs}>${title}</ellipse>`;
+    if (kind === 'r') return `<rect x="${a[0]}" y="${a[1]}" width="${a[2]}" height="${a[3]}" rx="${a[4]}" ${attrs}>${title}</rect>`;
+    return `<path d="${a[0]}" ${attrs}>${title}</path>`;
+  };
+  return `<figure><svg viewBox="8 0 84 186" class="bodymap" role="img" aria-label="${esc(label)}"><g class="silhouette">${base}</g>${shapes.map(sh).join('')}</svg><figcaption>${esc(label)}</figcaption></figure>`;
+}
+function drawMuscles(mus, active) {
+  const card = $('#muscleCard'); if (!card) return;
+  const mode = store.get('muscleMode') === 'recovery' ? 'recovery' : 'week';
+  const M = mus.muscles;
+  const wk = s => s >= 10 ? 'var(--brand)' : s >= 5 ? 'color-mix(in srgb, var(--brand) 65%, var(--surface-2))' : s > 0 ? 'color-mix(in srgb, var(--brand) 35%, var(--surface-2))' : 'var(--line)';
+  const rc = m => !M[m]?.last ? 'var(--line)' : M[m].recovery >= 100 ? 'var(--ok)' : M[m].recovery >= 50 ? 'var(--warn)' : 'var(--danger)';
+  const fill = m => mode === 'week' ? wk(M[m]?.week || 0) : rc(m);
+  // Muskler som schemat tränar men som inte fått något den här veckan
+  const planned = [...new Set((active?.plan?.templates || []).flatMap(tp => tp.items.flatMap(i => i.exercise?.primaryMuscles || [])))];
+  const missed = planned.filter(m => !(M[m]?.week > 0));
+  const tired = Object.entries(M).filter(([, v]) => v.last && v.recovery < 100).sort((a, b) => a[1].recovery - b[1].recovery);
+  card.innerHTML = `
+    <div class="seg" id="musSeg"><button type="button" data-v="week" class="${mode === 'week' ? 'on' : ''}">${t('thisWeek')}</button><button type="button" data-v="recovery" class="${mode === 'recovery' ? 'on' : ''}">${t('recovery')}</button></div>
+    <div class="bodymaps">${bodySvg(BODY_FRONT, fill, t('frontView'))}${bodySvg(BODY_BACK, fill, t('backView'))}</div>
+    ${mode === 'week' ? `<div class="legend"><span><i style="background:var(--line)"></i>0</span><span><i style="background:${wk(1)}"></i>1–4 ${t('sets')}</span><span><i style="background:${wk(5)}"></i>5–9</span><span><i style="background:var(--brand)"></i>10+</span></div>
+      ${missed.length ? `<p class="small" style="margin-bottom:0"><b>${t('missedThisWeek')}:</b> ${missed.map(muscle).join(', ')}</p>` : planned.length ? `<p class="small" style="margin-bottom:0;color:var(--ok)">${icon('check', 'sm')} ${t('allTrained')}</p>` : ''}`
+    : `<div class="legend"><span><i style="background:var(--ok)"></i>${t('recovered')}</span><span><i style="background:var(--warn)"></i>${t('halfway')}</span><span><i style="background:var(--danger)"></i>${t('needsRest')}</span></div>
+      ${tired.length ? tired.map(([m, v]) => `<div class="ex-row" style="padding:6px 0"><div class="grow small"><b>${esc(muscle(m))}</b><div class="muted">${t('readyAt', { when: new Date(v.readyAt).toLocaleString(L.locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) })}</div></div><div class="progress" style="width:90px"><i style="width:${v.recovery}%;background:${rc(m)}"></i></div></div>`).join('') : `<p class="small" style="margin-bottom:0;color:var(--ok)">${icon('check', 'sm')} ${t('allRecovered')}</p>`}
+      ${mus.advice && mus.advice.type !== 'ok' ? `<p class="muted small">${esc(mus.advice.type === 'rest' ? t('adviceRest', { n: mus.advice.days }) : mus.advice.type === 'cardio' ? t('adviceCardio', { m: mus.advice.muscles.slice(0, 4).map(muscle).join(', ').toLowerCase() }) : t('advicePartial', { m: mus.advice.muscles.slice(0, 4).map(muscle).join(', ').toLowerCase() }))}</p>` : ''}
+      <p class="muted small" style="margin-bottom:0">${t('recoveryNote')}</p>`}`;
+  card.querySelectorAll('#musSeg button').forEach(b => b.onclick = () => { store.set('muscleMode', b.dataset.v); drawMuscles(mus, active); });
+}
 
 // ---------- Kroppsmått ----------
 const MEASURES = ['waist', 'chest', 'hips', 'arm', 'thigh', 'calf', 'neck', 'bodyfat'];
@@ -1129,6 +1498,7 @@ views.installningar = async () => {
       <div class="setting"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('target')}</span><div class="grow"><b>${t('weeklyGoal')}</b><div class="muted small">${t('weeklyGoalHint')}</div></div>
         <select id="goalSel" style="width:auto">${[['', t('goalAuto')], ...Array.from({ length: 14 }, (_, i) => [i + 1, t('perWeek', { n: i + 1 })])].map(([v, l]) => `<option value="${v}" ${String(user.prefs.weekly_goal ?? '') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="setting"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('sound')}</span><div class="grow"><b>${t('soundSetting')}</b><div class="muted small">${t('soundSettingHint')}</div></div><label class="switch"><input type="checkbox" id="soundSw" ${soundOn() ? 'checked' : ''}><span></span></label></div>
+      <div class="setting"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('voice')}</span><div class="grow"><b>${t('voiceCoach')}</b><div class="muted small">${t('voiceCoachHint')}</div></div><label class="switch"><input type="checkbox" id="voiceSw" ${voiceOn() ? 'checked' : ''}><span></span></label></div>
       <div class="setting"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon('bell')}</span><div class="grow"><b>${t('notifySetting')}</b><div class="muted small" id="notifyHint">${t('notifySettingHint')}</div></div><label class="switch"><input type="checkbox" id="notifySw" ${store.get('notify') && window.Notification?.permission === 'granted' ? 'checked' : ''}><span></span></label></div>
     </div>
     <h2>${t('videos')}</h2>
@@ -1175,6 +1545,10 @@ views.installningar = async () => {
     user = await api(`/users/${user.id}`, { method: 'PATCH', body: { prefs: { weekly_goal: e.target.value || null } } }); store.set('user', user); toast(t('saved'));
   };
   $('#soundSw').onchange = e => { store.set('sound', e.target.checked); if (e.target.checked) beep(880, 150); };
+  $('#voiceSw').onchange = e => {
+    if (e.target.checked && !('speechSynthesis' in window)) { e.target.checked = false; return toast(t('voiceUnsupported')); }
+    store.set('voice', e.target.checked); if (e.target.checked) say(t('voiceTest'));
+  };
   $('#notifySw').onchange = async e => {
     if (!e.target.checked) { store.set('notify', false); return; }
     if (!('Notification' in window) || !window.isSecureContext) { e.target.checked = false; $('#notifyHint').textContent = t('notifyInsecure'); $('#notifyHint').style.color = 'var(--warn)'; return; }
@@ -1244,3 +1618,5 @@ $('#settingsBtn').onclick = () => { location.hash = '#/installningar'; };
 drawChrome();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 loadNames().finally(render);
+setOffline(false);
+if (outbox().length) flushOutbox();

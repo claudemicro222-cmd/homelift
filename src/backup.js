@@ -3,10 +3,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const TABLES = ['users', 'programs', 'sessions', 'set_logs', 'bodyweight', 'measurements']; // i beroendeordning
+const TABLES = ['custom_exercises', 'users', 'programs', 'sessions', 'set_logs', 'bodyweight', 'measurements']; // i beroendeordning
 const KEEP = 14;
 
-module.exports = function backup({ db, dataDir, HttpError, VERSION }) {
+module.exports = function backup({ db, dataDir, HttpError, VERSION, onImport }) {
   const DIR = path.join(dataDir, 'backups');
   fs.mkdirSync(DIR, { recursive: true });
 
@@ -77,6 +77,7 @@ module.exports = function backup({ db, dataDir, HttpError, VERSION }) {
           return reject(new HttpError(400, 'Import failed: ' + e.message));
         }
         db.exec('PRAGMA foreign_keys = ON');
+        try { onImport?.(); } catch {}
         resolve({ ok: true, imported: counts });
       });
     });

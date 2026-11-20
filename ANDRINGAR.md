@@ -5,19 +5,22 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 
 ## Att göra
 
-- [ ] **Tydligare lokal video.** När videon redan är nedladdad ska alternativet att ladda ner den döljas och ersättas med "Ta bort videon". Tas videon bort kommer "Ladda ner" tillbaka. Gör det tydligt att videon ligger lokalt, t.ex. "Sparad på servern" i en grön ruta. *(tillagd 2026-11-20)*
-- [ ] **Uppskattat 1RM med graf.** Visa uppskattat maxlyft (1RM) per övning över tid som en graf i statistiken. *(tillagd 2026-11-20)*
-- [ ] **Muskelkarta.** En figur som visar vilka muskler du tränat den här veckan och vilka du missat. *(tillagd 2026-11-20)*
-- [ ] **Byt övning mitt i passet.** Om utrustningen är upptagen eller något gör ont: byt övningen i det pågående passet mot en likvärdig med ett tryck, utan att ändra schemat. *(tillagd 2026-11-20)*
-- [ ] **Röstcoach.** Läser upp nästa övning, set och vikt och räknar ner slutet av vilan, så att man slipper titta på mobilen. Kan slås av och på. *(tillagd 2026-11-20)*
-- [ ] **Månadsrapport.** Sammanfattning per månad: antal pass, total volym, nya rekord och viktförändring. *(tillagd 2026-11-20)*
-- [ ] **Ansträngning per set (RPE).** Valfritt betyg på hur tungt setet kändes, som används för att göra viktförslagen mer träffsäkra. *(tillagd 2026-11-20)*
-- [ ] **Egna övningar.** Lägg till egna övningar med namn, muskler, utrustning, video och instruktioner, och använd dem i scheman. *(tillagd 2026-11-20)*
-- [ ] **Snabbpass.** Ett kort pass på 15–20 minuter, för dagar med ont om tid, byggt av dagens pass. *(tillagd 2026-11-20)*
-- [ ] **Vilodagsförslag.** Visa vilka muskler som är återhämtade och föreslå vila när det behövs. *(tillagd 2026-11-20)*
-- [ ] **Offlineläge.** Appen fungerar utan nätverk, t.ex. i ett gym utan täckning, och skickar loggade set till servern när anslutningen är tillbaka. *(tillagd 2026-11-20)*
+_Tom just nu._
 
 ## Klart
+
+### 0.4.0 (2026-11-20)
+- [x] **Tydligare lokal video.** När videon redan är nedladdad ska alternativet att ladda ner den döljas och ersättas med "Ta bort videon". Tas videon bort kommer "Ladda ner" tillbaka. Gör det tydligt att videon ligger lokalt, t.ex. "Sparad på servern" i en grön ruta. *(tillagd 2026-11-20)*
+- [x] **Uppskattat 1RM med graf.** Visa uppskattat maxlyft (1RM) per övning över tid som en graf i statistiken. *(tillagd 2026-11-20)*
+- [x] **Muskelkarta.** En figur som visar vilka muskler du tränat den här veckan och vilka du missat. *(tillagd 2026-11-20)*
+- [x] **Byt övning mitt i passet.** Om utrustningen är upptagen eller något gör ont: byt övningen i det pågående passet mot en likvärdig med ett tryck, utan att ändra schemat. *(tillagd 2026-11-20)*
+- [x] **Röstcoach.** Läser upp nästa övning, set och vikt och räknar ner slutet av vilan, så att man slipper titta på mobilen. Kan slås av och på. *(tillagd 2026-11-20)*
+- [x] **Månadsrapport.** Sammanfattning per månad: antal pass, total volym, nya rekord och viktförändring. *(tillagd 2026-11-20)*
+- [x] **Ansträngning per set (RPE).** Valfritt betyg på hur tungt setet kändes, som används för att göra viktförslagen mer träffsäkra. *(tillagd 2026-11-20)*
+- [x] **Egna övningar.** Lägg till egna övningar med namn, muskler, utrustning, video och instruktioner, och använd dem i scheman. *(tillagd 2026-11-20)*
+- [x] **Snabbpass.** Ett kort pass på 15–20 minuter, för dagar med ont om tid, byggt av dagens pass. *(tillagd 2026-11-20)*
+- [x] **Vilodagsförslag.** Visa vilka muskler som är återhämtade och föreslå vila när det behövs. *(tillagd 2026-11-20)*
+- [x] **Offlineläge.** Appen fungerar utan nätverk, t.ex. i ett gym utan täckning, och skickar loggade set till servern när anslutningen är tillbaka. *(tillagd 2026-11-20)*
 
 ### 0.3.0 (2026-11-20)
 - [x] **Fixa videonedladdningen.** Nedladdning av video misslyckas och appen visar bara "Kunde inte ladda ner:" utan orsak. Visa det riktiga felet, ta reda på varför hämtningen misslyckas (t.ex. att yt-dlp numera behöver en JavaScript-motor för YouTube, eller att YouTube spärrar servern) och se till att det fungerar. *(tillagd 2026-11-20)*

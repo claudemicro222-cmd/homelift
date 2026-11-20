@@ -97,7 +97,7 @@ function isCompound(ex) { return ex.mechanic === 'compound' && !ISOLATION.test(e
 
 // Övningar som mäts i tid i stället för reps
 const TIMED = /^plank$|side bridge|wall sit|isometric neck|isometric chest|one handed hang|dead hang|hollow hold|l-sit/i;
-function isTimed(ex) { return !!ex && TIMED.test(ex.name); }
+function isTimed(ex) { return !!ex && (ex.custom ? !!ex.timedCustom : TIMED.test(ex.name)); }
 function timedScheme(level) {
   const [secMin, secMax] = { nyborjare: [20, 30], medel: [30, 45], avancerad: [45, 60] }[level] || [20, 30];
   return { timed: true, sets: 3, secMin, secMax, repsMin: secMin, repsMax: secMax, rest: 60 };

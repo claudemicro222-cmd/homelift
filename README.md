@@ -31,23 +31,31 @@ Du svarar på några frågor om vilken utrustning du har, vad du vill träna och
 - Byt ut vilken övning som helst mot ett alternativ som tränar samma muskler med din utrustning.
 - Egen vilotid och antal set per övning, och **superset** där två övningar körs i följd utan vila emellan.
 - **Cardiopass** i schemat: crosstrainer, löpning, skidor, cykel, rodd, promenad, simning med flera.
+- **Egna övningar** med namn, muskler, utrustning, instruktioner och video, som kan läggas in i schemat.
 
 **Under passet**
 - Logga vikt och reps per set. **Förra passets siffror står på varje setrad.**
 - **Smart progression:** förslag på vikt, reps eller tid med ett tryck på "Använd förslaget", och en lättare vecka om du stått still flera pass.
+- **Hur tungt kändes det?** Valfritt betyg per set (lätt, lagom, tungt, max) som gör viktförslagen mer träffsäkra.
+- **Byt övning mitt i passet** om redskapet är upptaget, utan att schemat ändras.
+- **Snabbpass på 15–20 minuter** för dagar med ont om tid.
+- **Röstcoach** som läser upp nästa övning och räknar ner vilan.
 - **Personbästa firas direkt** när du slår ett rekord.
 - Vilotimer som startar automatiskt, med ljud av/på och notis när appen ligger i bakgrunden.
 - **Skivkalkylator** som visar vilka viktskivor som ska på stången.
 - Timer för tidsövningar som plankan, uppvärmning före och stretch efter passet.
+- **Offlineläge:** fungerar i gymmet utan täckning, och loggade set skickas till servern när anslutningen är tillbaka.
 
 **Övningar och videor**
 - Ca 870 övningar med bilder och steg-för-steg-instruktioner, **på svenska och engelska**. Sök fungerar på båda språken.
 - **Instruktionsvideo direkt på övningssidan.** HomeLift hittar en passande YouTube-video och bäddar in den. Du kan välja en egen länk.
-- **Lokala videor utan reklam:** ladda ner till servern för dina scheman eller alla övningar, eller ladda upp en egen fil.
+- **Lokala videor utan reklam:** ladda ner till servern för dina scheman eller alla övningar, eller ladda upp en egen fil. En sparad video märks med "Sparad på servern" och kan tas bort med ett tryck.
 
 **Statistik och mål**
 - **Veckomål** för antal pass, med framsteg och streak.
-- Utvecklingskurva per övning och **rekordlista** (tyngsta vikt, flest reps, bästa 1RM, längsta tid) med datum.
+- **Uppskattat 1RM över tid** per övning och **rekordlista** (tyngsta vikt, flest reps, bästa 1RM, längsta tid) med datum.
+- **Månadsrapport** med pass, volym, tid, nya rekord och viktförändring jämfört med förra månaden.
+- **Muskelkarta** som visar vilka muskler du tränat i veckan och vilka som är återhämtade, med **förslag på vilodag** när det behövs.
 - Vikt, längd och BMI med viktkurva, och **kroppsmått** (midja, bröst, armar, lår med mera) med grafer.
 
 **Din data**
@@ -190,7 +198,7 @@ DATA_DIR=./userdata node --no-warnings src/server.js
 ```
 
 ```
-src/server.js              API och databas
+src/server.js              API, databas, statistik, månadsrapport och muskelstatus
 src/generator.js           Schemagenerator, tidsövningar och cardiotyper
 src/videos.js              Inbäddade och lokala instruktionsvideor
 src/backup.js              Säkerhetskopior, export och import

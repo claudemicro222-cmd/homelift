@@ -235,3 +235,73 @@ Object.assign(I18N.en, {
   noBackups: 'No copies yet.', backupFolder: 'The copies are in the backups folder in the app data folder.', backupDone: 'Backup saved',
   importConfirm: 'All current data will be replaced with the contents of the file. A copy of the current data is saved first. Continue?', importDone: 'Imported: {n} workouts',
 });
+
+// ---------- v0.4 ----------
+Object.assign(I18N.sv, {
+  // Offline
+  offlineBar: 'Offline, servern går inte att nå', offlinePending: '{n} ändringar väntar', syncing: 'Skickar {n} sparade ändringar…', offlineError: 'Servern går inte att nå just nu.',
+  // Video
+  savedOnServer: 'Sparad på servern', savedOnServerHint: 'Spelas utan reklam', removeVideoShort: 'Ta bort', removeVideoConfirm: 'Ta bort videon från servern? Du kan ladda ner den igen sen.', videoRemoved: 'Videon är borttagen',
+  // 1RM och utveckling
+  bestEver: 'Bästa hittills', sinceFirst: 'Sedan första passet {date}', e1rmExplain: 'Uppskattat 1RM är den vikt du troligen klarar en gång, räknat från vikt och reps (Epley).',
+  heaviestShort: 'Tyngsta', heaviestLabel: 'Tyngsta vikt per pass (kg)',
+  // Månadsrapport
+  monthReport: 'Månadsrapport', prevMonth: 'Föregående månad', nextMonth: 'Nästa månad', rWorkouts: 'pass ({s} styrka, {c} cardio)', rTime: 'träning, {d} dagar', rRecords: 'nya rekord',
+  rCardio: '{n} cardiopass, {min} min', rNewRecords: 'Nya rekord', andMore: 'och {n} till', rTop: 'Flest set', rEmpty: 'Inga pass den här månaden.',
+  // Muskelkarta och återhämtning
+  muscleMap: 'Muskelkarta', recovery: 'Återhämtning', frontView: 'Framsida', backView: 'Baksida', missedThisWeek: 'Inte tränat än i veckan', allTrained: 'Alla muskler i schemat har tränats i veckan.',
+  recovered: 'Återhämtad', halfway: 'På väg', needsRest: 'Behöver vila', readyAt: 'Återhämtad ca {when}', allRecovered: 'Alla muskler är återhämtade.',
+  recoveryNote: 'Uppskattning: 48 timmar per muskel, 72 timmar för stora muskler efter många set.',
+  adviceTitle: 'Förslag: vila idag', adviceTitlePartial: 'Tänk på återhämtningen', seeRecovery: 'Se återhämtningen',
+  adviceRest: 'Du har tränat {n} dagar i rad. En vilodag eller en lugn promenad hjälper musklerna att bygga upp sig.',
+  adviceCardio: 'Musklerna i dagens pass är inte återhämtade än ({m}). Kör hellre ett lätt cardiopass eller vila idag.',
+  advicePartial: 'En del muskler i dagens pass är inte helt återhämtade ({m}). Kör lite lättare på dem.',
+  // Snabbpass
+  quickWorkout: 'Snabbpass 15–20 min', quickShort: 'Snabbpass', quickHint: 'En övning per muskelgrupp, två set och övningarna parvis i superset.',
+  // Byt övning i passet
+  swapInWorkoutBtn: 'Byt övning i det här passet', swapInWorkout: 'Byt ut {name}', swapInWorkoutHint: 'Gäller bara det här passet. Schemat ändras inte.', backToOriginal: 'Tillbaka till ursprungliga',
+  swappedTo: 'Bytt till {name}', swappedFrom: 'I stället för {name}',
+  // RPE
+  howHard: 'Hur tungt?', rpeEasyL: 'Lätt', rpeOkL: 'Lagom', rpeHardL: 'Tungt', rpeMaxL: 'Max',
+  rpeHard: 'Du klarade alla reps förra gången men det var max. Stanna kvar på samma vikt.', rpeEasy: 'Du klarade alla reps och det kändes lätt. Öka lite extra.', rpeEasyReps: 'Det kändes lätt förra gången. Sikta på fler reps.',
+  // Röstcoach
+  voiceCoach: 'Röstcoach', voiceCoachHint: 'Läser upp nästa övning och räknar ner vilan.', voiceOn: 'Röstcoachen är på', voiceOff: 'Röstcoachen är av', voiceUnsupported: 'Webbläsaren har ingen talsyntes.', voiceTest: 'Röstcoachen är på.',
+  voiceRest: 'Vila {n} sekunder.', voiceTen: 'Tio sekunder kvar.', voiceGo: 'Kör! {name}.', voiceGoShort: 'Kör!', voiceLastSet: 'Det var sista setet. Snyggt jobbat!',
+  voiceNext: 'Nästa: {name}, set {set} av {sets}, {what}.', voiceReps: '{n} reps', voiceSec: '{n} sekunder', voiceSuperset: 'Direkt vidare till {name}.',
+  voiceFirst: 'Första övningen: {name}, {scheme}.', voiceScheme: '{sets} set med {min} till {max} reps', voiceSchemeTimed: '{sets} set på {sec} sekunder', voiceAllDone: 'Alla set är klara.',
+  // Egna övningar
+  allExercises: 'Alla', myExercises: 'Mina övningar', newCustomShort: 'Ny övning', newCustom: 'Ny egen övning', editCustom: 'Ändra övningen', customTag: 'Egen',
+  noCustom: 'Du har inga egna övningar än. Tryck på "Ny övning" för att lägga till en.', equipmentLabel: 'Utrustning', levelLabel: 'Nivå', customTimedHint: 'Räknas i sekunder i stället för reps.',
+  customInstrHint: 'Ett steg per rad', customVideo: 'YouTube-länk (valfri)', pickMuscle: 'Välj minst en muskel.', noInstructions: 'Inga instruktioner än.',
+  removeCustomConfirm: 'Ta bort "{name}"? Loggade pass med övningen finns kvar.', removed: 'Borttagen',
+  addToProgram: 'Lägg till i schemat', addToProgramHint: 'Lägg till {name} sist i ett pass i {program}.', addedToProgram: 'Tillagd i {name}',
+});
+Object.assign(I18N.en, {
+  offlineBar: 'Offline, the server can not be reached', offlinePending: '{n} changes waiting', syncing: 'Sending {n} saved changes…', offlineError: 'The server can not be reached right now.',
+  savedOnServer: 'Saved on the server', savedOnServerHint: 'Plays without ads', removeVideoShort: 'Remove', removeVideoConfirm: 'Remove the video from the server? You can download it again later.', videoRemoved: 'Video removed',
+  bestEver: 'Best so far', sinceFirst: 'Since the first workout {date}', e1rmExplain: 'Estimated 1RM is the weight you could likely lift once, calculated from weight and reps (Epley).',
+  heaviestShort: 'Heaviest', heaviestLabel: 'Heaviest weight per workout (kg)',
+  monthReport: 'Monthly report', prevMonth: 'Previous month', nextMonth: 'Next month', rWorkouts: 'workouts ({s} strength, {c} cardio)', rTime: 'training, {d} days', rRecords: 'new records',
+  rCardio: '{n} cardio workouts, {min} min', rNewRecords: 'New records', andMore: 'and {n} more', rTop: 'Most sets', rEmpty: 'No workouts this month.',
+  muscleMap: 'Muscle map', recovery: 'Recovery', frontView: 'Front', backView: 'Back', missedThisWeek: 'Not trained yet this week', allTrained: 'Every muscle in your schedule has been trained this week.',
+  recovered: 'Recovered', halfway: 'Getting there', needsRest: 'Needs rest', readyAt: 'Recovered around {when}', allRecovered: 'All muscles are recovered.',
+  recoveryNote: 'Estimate: 48 hours per muscle, 72 hours for large muscles after many sets.',
+  adviceTitle: 'Suggestion: rest today', adviceTitlePartial: 'Mind your recovery', seeRecovery: 'See recovery',
+  adviceRest: 'You have trained {n} days in a row. A rest day or an easy walk helps your muscles rebuild.',
+  adviceCardio: 'The muscles in today\'s workout have not recovered yet ({m}). Do an easy cardio session or rest today.',
+  advicePartial: 'Some muscles in today\'s workout are not fully recovered ({m}). Go a bit lighter on them.',
+  quickWorkout: 'Quick workout 15–20 min', quickShort: 'Quick workout', quickHint: 'One exercise per muscle group, two sets, with exercises paired in supersets.',
+  swapInWorkoutBtn: 'Swap exercise in this workout', swapInWorkout: 'Replace {name}', swapInWorkoutHint: 'Only for this workout. Your schedule stays the same.', backToOriginal: 'Back to the original',
+  swappedTo: 'Swapped to {name}', swappedFrom: 'Instead of {name}',
+  howHard: 'How hard?', rpeEasyL: 'Easy', rpeOkL: 'Moderate', rpeHardL: 'Hard', rpeMaxL: 'Max',
+  rpeHard: 'You hit all reps last time but it was a max effort. Stay at the same weight.', rpeEasy: 'You hit all reps and it felt easy. Go up a bit more.', rpeEasyReps: 'It felt easy last time. Aim for more reps.',
+  voiceCoach: 'Voice coach', voiceCoachHint: 'Reads out the next exercise and counts down your rest.', voiceOn: 'Voice coach on', voiceOff: 'Voice coach off', voiceUnsupported: 'This browser has no speech synthesis.', voiceTest: 'Voice coach is on.',
+  voiceRest: 'Rest {n} seconds.', voiceTen: 'Ten seconds left.', voiceGo: 'Go! {name}.', voiceGoShort: 'Go!', voiceLastSet: 'That was the last set. Great work!',
+  voiceNext: 'Next: {name}, set {set} of {sets}, {what}.', voiceReps: '{n} reps', voiceSec: '{n} seconds', voiceSuperset: 'Straight on to {name}.',
+  voiceFirst: 'First exercise: {name}, {scheme}.', voiceScheme: '{sets} sets of {min} to {max} reps', voiceSchemeTimed: '{sets} sets of {sec} seconds', voiceAllDone: 'All sets are done.',
+  allExercises: 'All', myExercises: 'My exercises', newCustomShort: 'New exercise', newCustom: 'New custom exercise', editCustom: 'Edit exercise', customTag: 'Custom',
+  noCustom: 'You have no custom exercises yet. Tap "New exercise" to add one.', equipmentLabel: 'Equipment', levelLabel: 'Level', customTimedHint: 'Counted in seconds instead of reps.',
+  customInstrHint: 'One step per line', customVideo: 'YouTube link (optional)', pickMuscle: 'Pick at least one muscle.', noInstructions: 'No instructions yet.',
+  removeCustomConfirm: 'Remove "{name}"? Logged workouts with it are kept.', removed: 'Removed',
+  addToProgram: 'Add to schedule', addToProgramHint: 'Add {name} at the end of a workout in {program}.', addedToProgram: 'Added to {name}',
+});
