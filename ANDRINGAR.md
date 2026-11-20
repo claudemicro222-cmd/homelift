@@ -5,7 +5,7 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 
 ## Att göra
 
-_Tom just nu._
+- [ ] **Förklaringar och illustrationer på stretchövningarna.** Varje stretch- och uppvärmningsövning får en tydlig steg-för-steg-förklaring och en bild som visar hur rörelsen görs, både i listan och i den guidade timern. *(tillagd 2026-11-20)*
 
 ## Klart
 
