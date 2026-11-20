@@ -1,0 +1,11 @@
+services:
+  homelift:
+    image: ghcr.io/claudemicro222-cmd/homelift:latest
+    container_name: homelift
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /mnt/user/appdata/homelift:/data
+    environment:
+      - TZ=Europe/Stockholm

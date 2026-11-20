@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>homelift</Name>
+  <Repository>ghcr.io/claudemicro222-cmd/homelift:latest</Repository>
+  <Registry>https://github.com/claudemicro222-cmd/homelift/pkgs/container/homelift</Registry>
+  <Support>https://github.com/claudemicro222-cmd/homelift</Support>
+  <Project>https://github.com/claudemicro222-cmd/homelift</Project>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <TemplateURL>https://raw.githubusercontent.com/claudemicro222-cmd/homelift/main/unraid/homelift.xml</TemplateURL>
+  <ReadMe>https://github.com/claudemicro222-cmd/homelift#readme</ReadMe>
+  <Changes>Se https://github.com/claudemicro222-cmd/homelift/blob/main/ANDRINGAR.md</Changes>
+  <Privileged>false</Privileged>
+  <Overview>HomeLift – självhostat träningsprogram. Skapar scheman utifrån utrustning, kroppsdelar och nivå, loggar styrke- och cardiopass, visar statistik och BMI. Svenska/engelska, ljust/mörkt läge, inbäddade och lokala instruktionsvideor, personbästa, kroppsmått, nattlig säkerhetskopia och Home Assistant-integration (via HACS).</Overview>
+  <Category>Tools: HomeAutomation: Other:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/claudemicro222-cmd/homelift/main/public/icon-512.png</Icon>
+  <Config Name="Webbport" Target="8080" Default="8080" Mode="tcp" Description="Port för webbgränssnittet" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/homelift" Mode="rw" Description="Databas, övningsbilder och videor. Ligger kvar när containern uppdateras." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/homelift</Config>
+  <Config Name="Tidszon" Target="TZ" Default="Europe/Stockholm" Mode="" Description="Används för träningsdagar och påminnelser" Type="Variable" Display="advanced" Required="false" Mask="false">Europe/Stockholm</Config>
+</Container>

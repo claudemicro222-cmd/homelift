@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to HomeLift",
+        "description": "Enter the address of HomeLift on your server, e.g. http://192.168.1.10:8080",
+        "data": {
+          "url": "Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach HomeLift at that address."
+    },
+    "abort": {
+      "already_configured": "HomeLift at that address is already added."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "next_workout": {
+        "name": "Next workout"
+      },
+      "sessions_this_week": {
+        "name": "Workouts this week"
+      },
+      "week_streak": {
+        "name": "Week streak"
+      },
+      "total_sessions": {
+        "name": "Total workouts"
+      },
+      "last_session": {
+        "name": "Last workout"
+      },
+      "next_training_date": {
+        "name": "Next training day"
+      },
+      "weight": {
+        "name": "Weight"
+      },
+      "bmi": {
+        "name": "BMI"
+      },
+      "weekly_goal": {
+        "name": "Weekly goal"
+      },
+      "goal_streak": {
+        "name": "Weekly goal streak"
+      }
+    },
+    "binary_sensor": {
+      "training_today": {
+        "name": "Training day today"
+      },
+      "weekly_goal_reached": {
+        "name": "Weekly goal reached"
+      }
+    }
+  }
+}

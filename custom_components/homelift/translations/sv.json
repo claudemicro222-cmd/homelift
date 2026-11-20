@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anslut till HomeLift",
+        "description": "Ange adressen till HomeLift på din server, t.ex. http://192.168.1.10:8080",
+        "data": {
+          "url": "Adress"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kunde inte nå HomeLift på den adressen."
+    },
+    "abort": {
+      "already_configured": "HomeLift med den adressen är redan tillagd."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "next_workout": {
+        "name": "Nästa pass"
+      },
+      "sessions_this_week": {
+        "name": "Pass denna vecka"
+      },
+      "week_streak": {
+        "name": "Veckor i rad"
+      },
+      "total_sessions": {
+        "name": "Pass totalt"
+      },
+      "last_session": {
+        "name": "Senaste pass"
+      },
+      "next_training_date": {
+        "name": "Nästa träningsdag"
+      },
+      "weight": {
+        "name": "Vikt"
+      },
+      "bmi": {
+        "name": "BMI"
+      },
+      "weekly_goal": {
+        "name": "Veckomål"
+      },
+      "goal_streak": {
+        "name": "Veckor i rad med nått mål"
+      }
+    },
+    "binary_sensor": {
+      "training_today": {
+        "name": "Träningsdag idag"
+      },
+      "weekly_goal_reached": {
+        "name": "Veckomål nått"
+      }
+    }
+  }
+}

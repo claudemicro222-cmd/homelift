@@ -1,0 +1,59 @@
+blueprint:
+  name: HomeLift – påminnelse på träningsdagar
+  description: >-
+    Skickar en notis till din mobil på dagar då HomeLift-schemat har ett pass,
+    om du inte redan har tränat. Kräver integrationen HomeLift och Home Assistant-appen i mobilen.
+  domain: automation
+  input:
+    training_today:
+      name: Träningsdag idag
+      description: Sensorn "Träningsdag idag" för profilen (från HomeLift).
+      selector:
+        entity:
+          filter:
+            - integration: homelift
+              domain: binary_sensor
+    reminder_time:
+      name: Tid för påminnelsen
+      default: "17:00:00"
+      selector:
+        time: {}
+    notify_device:
+      name: Mobil
+      description: Mobilen som ska få notisen (Home Assistant-appen).
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    title:
+      name: Rubrik
+      default: "Dags att träna 💪"
+      selector:
+        text: {}
+
+triggers:
+  - trigger: time
+    at: !input reminder_time
+
+variables:
+  sensor: !input training_today
+
+conditions:
+  - condition: state
+    entity_id: !input training_today
+    state: "on"
+  - condition: template
+    value_template: "{{ not state_attr(sensor, 'done') }}"
+
+actions:
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: !input title
+    message: >-
+      {% set w = state_attr(sensor, 'workout') %}
+      {% set m = state_attr(sensor, 'minutes') %}
+      {% set names = {'crosstrainer': 'Crosstrainer', 'lopning': 'Löpning', 'skidor': 'Skidor', 'cykel': 'Cykel', 'rodd': 'Rodd', 'promenad': 'Promenad', 'simning': 'Simning', 'trappmaskin': 'Trappmaskin', 'hopprep': 'Hopprep'} %}
+      Idag: {{ names.get(w, w) }}{% if m %}, ca {{ m }} min{% endif %}.
+
+mode: single
