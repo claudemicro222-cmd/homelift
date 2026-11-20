@@ -5,7 +5,7 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 
 ## Att göra
 
-_Tom just nu._
+- [ ] **Tydligare lokal video.** När videon redan är nedladdad ska alternativet att ladda ner den döljas och ersättas med "Ta bort videon". Tas videon bort kommer "Ladda ner" tillbaka. Gör det tydligt att videon ligger lokalt, t.ex. "Sparad på servern" i en grön ruta. *(tillagd 2026-11-20)*
 
 ## Klart
 
