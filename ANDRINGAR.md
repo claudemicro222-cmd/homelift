@@ -6,6 +6,7 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 ## Att göra
 
 - [ ] **Förklaringar och illustrationer på stretchövningarna.** Varje stretch- och uppvärmningsövning får en tydlig steg-för-steg-förklaring och en bild som visar hur rörelsen görs, både i listan och i den guidade timern. *(tillagd 2026-11-20)*
+- [ ] **Välj video eller animation i profilen.** En inställning i profilen där man väljer om övningssidan (och passet) ska visa instruktionsvideon eller en lättare animation av övningen (bilderna som växlar, som en gif). Med animation laddas ingen video. *(tillagd 2026-11-22)*
 
 ## Klart
 
