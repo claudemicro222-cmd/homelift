@@ -1,0 +1,56 @@
+name: Release med nyheter
+
+# Skapar en GitHub Release för versionen i package.json, med texten från CHANGELOG.md.
+# Körs vid push till main och kan också startas för hand (t.ex. för en äldre version).
+on:
+  push:
+    branches: [main]
+    paths: ['package.json', 'CHANGELOG.md']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, t.ex. 0.4.0 (tomt = versionen i package.json)'
+        required: false
+      ref:
+        description: 'Commit som versionen ska peka på (tomt = senaste på main)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Skapa release om den saknas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          VERSION="${INPUT_VERSION:-$(node -p "require('./package.json').version")}"
+          REF="${INPUT_REF:-$GITHUB_SHA}"
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG finns redan"; exit 0
+          fi
+          # Avsnittet för versionen i CHANGELOG.md
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v " " { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "Ingen text för $VERSION i CHANGELOG.md, hoppar över"; exit 0
+          fi
+          {
+            echo
+            echo '**Uppdatera:** Docker → Check for Updates i Unraid, eller `docker compose pull && docker compose up -d`.'
+            echo 'Image: `ghcr.io/${{ github.repository_owner }}/homelift:latest`'
+          } >> notes.md
+          LATEST=false
+          [ "$VERSION" = "$(node -p "require('./package.json').version")" ] && LATEST=true
+          gh release create "$TAG" --target "$REF" --title "HomeLift $VERSION" --notes-file notes.md --latest=$LATEST
