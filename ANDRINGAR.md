@@ -7,6 +7,7 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 
 - [ ] **Förklaringar och illustrationer på stretchövningarna.** Varje stretch- och uppvärmningsövning får en tydlig steg-för-steg-förklaring och en bild som visar hur rörelsen görs, både i listan och i den guidade timern. *(tillagd 2026-11-20)*
 - [ ] **Välj video eller animation i profilen.** En inställning i profilen där man väljer om övningssidan (och passet) ska visa instruktionsvideon eller en lättare animation av övningen (bilderna som växlar, som en gif). Med animation laddas ingen video. *(tillagd 2026-11-22)*
+- [ ] **Förra passets vikter förifyllda.** När du kör samma övning igen står förra passets vikt och reps redan i varje set, utgråade. Trycker du bara på bocken för setet sparas de gråa värdena som de är, utan att du behöver skriva något. Ändrar du ett värde gäller det nya. *(tillagd 2026-11-23)*
 
 ## Klart
 
