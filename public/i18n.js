@@ -305,3 +305,17 @@ Object.assign(I18N.en, {
   removeCustomConfirm: 'Remove "{name}"? Logged workouts with it are kept.', removed: 'Removed',
   addToProgram: 'Add to schedule', addToProgramHint: 'Add {name} at the end of a workout in {program}.', addedToProgram: 'Added to {name}',
 });
+
+// ---------- v0.5 ----------
+Object.assign(I18N.sv, {
+  showVideo: 'Visa instruktionsvideo', showLocalVideo: 'Visa videon (sparad på servern)', noVideoFound: 'Ingen video hittades.',
+  musMain: 'Tränas mest', musHelp: 'Hjälper till', howToShort: 'Så gör du', openExercise: 'Öppna övningen', backToWorkout: 'Tryck för att gå tillbaka till passet',
+  mediaSetting: 'Visa övningar med', mediaAnim: 'Animation', mediaVideo: 'Video', mediaBoth: 'Båda',
+  mediaHint: 'Animation är snabbast och laddar ingen video. Videon kan alltid visas med en knapp.',
+});
+Object.assign(I18N.en, {
+  showVideo: 'Show instruction video', showLocalVideo: 'Show the video (saved on the server)', noVideoFound: 'No video found.',
+  musMain: 'Main muscles', musHelp: 'Assisting', howToShort: 'How to', openExercise: 'Open exercise', backToWorkout: 'Tap to go back to the workout',
+  mediaSetting: 'Show exercises with', mediaAnim: 'Animation', mediaVideo: 'Video', mediaBoth: 'Both',
+  mediaHint: 'Animation is fastest and loads no video. The video can always be shown with a button.',
+});

@@ -300,3 +300,33 @@ svg.bodymap .mus { stroke: var(--surface); stroke-width: .8; transition: fill .2
 .btn.ic:disabled { opacity: .35; }
 a.card.link.row { flex-wrap: nowrap; }
 .icon.chev { transform: scaleX(-1); flex: none; color: var(--muted); }
+
+/* v0.5 */
+svg.move { display: block; flex: none; fill: none; stroke: var(--brand); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; background: var(--surface-2); border-radius: 12px; }
+svg.move circle { fill: var(--brand); stroke: none; }
+svg.move .floor { stroke: var(--line); stroke-width: 1.5; }
+svg.move .prop { fill: var(--line); stroke: none; }
+svg.move .propline { stroke: var(--muted); stroke-width: 2; opacity: .6; }
+svg.move.sm { width: 64px; height: 64px; }
+svg.move.lg { width: 150px; height: 150px; margin: 4px auto 8px; }
+.mob-list li > .grow { min-width: 0; }
+.move-steps { margin: 4px 0 0; padding-left: 18px; font-size: .8rem; color: var(--muted); }
+.move-steps li { padding: 1px 0; border: 0 !important; display: list-item; }
+.move-steps.big { text-align: left; font-size: .85rem; max-width: 340px; margin: 6px auto 0; }
+.bigtimer.with-move .ring { width: 150px; height: 150px; }
+.bigtimer.with-move .ring .num b { font-size: 2.2rem; }
+.muscle-card { margin-top: 12px; }
+.muscle-card .bodymaps { margin-top: 0; }
+.bodymaps.small svg.bodymap { max-height: 170px; }
+.mus-legend { display: grid; gap: 4px; font-size: .85rem; }
+.mus-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+details.howto { margin-top: 10px; }
+details.howto > summary { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--brand); font-weight: 600; font-size: .85rem; list-style: none; }
+details.howto > summary::-webkit-details-marker { display: none; }
+.howto-body { margin-top: 8px; display: grid; gap: 8px; }
+.howto-body .anim { aspect-ratio: 16/10; }
+.muscle-mini { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; }
+.set-grid input::placeholder { color: var(--muted); opacity: .75; }
+.timer .lbl { cursor: pointer; }
+.timer.away { outline: 2px solid var(--brand); }
+.timer .lbl small.back { color: var(--brand); opacity: 1; font-weight: 700; }

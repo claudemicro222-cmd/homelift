@@ -34,7 +34,7 @@ Du svarar på några frågor om vilken utrustning du har, vad du vill träna och
 - **Egna övningar** med namn, muskler, utrustning, instruktioner och video, som kan läggas in i schemat.
 
 **Under passet**
-- Logga vikt och reps per set. **Förra passets siffror står på varje setrad.**
+- Logga vikt och reps per set. **Förra passets vikt och reps står förifyllda i grått**, så räcker det att bocka av setet.
 - **Smart progression:** förslag på vikt, reps eller tid med ett tryck på "Använd förslaget", och en lättare vecka om du stått still flera pass.
 - **Hur tungt kändes det?** Valfritt betyg per set (lätt, lagom, tungt, max) som gör viktförslagen mer träffsäkra.
 - **Byt övning mitt i passet** om redskapet är upptaget, utan att schemat ändras.
@@ -43,12 +43,15 @@ Du svarar på några frågor om vilken utrustning du har, vad du vill träna och
 - **Personbästa firas direkt** när du slår ett rekord.
 - Vilotimer som startar automatiskt, med ljud av/på och notis när appen ligger i bakgrunden.
 - **Skivkalkylator** som visar vilka viktskivor som ska på stången.
-- Timer för tidsövningar som plankan, uppvärmning före och stretch efter passet.
+- Timer för tidsövningar som plankan, uppvärmning före och stretch efter passet, med **animerade figurer och steg-för-steg** för varje rörelse.
+- Vilotimern syns på alla sidor, och tillbaka till passet hamnar du på samma ställe som innan.
 - **Offlineläge:** fungerar i gymmet utan täckning, och loggade set skickas till servern när anslutningen är tillbaka.
 
 **Övningar och videor**
 - Ca 870 övningar med bilder och steg-för-steg-instruktioner, **på svenska och engelska**. Sök fungerar på båda språken.
-- **Instruktionsvideo direkt på övningssidan.** HomeLift hittar en passande YouTube-video och bäddar in den. Du kan välja en egen länk.
+- **Animation och muskelbild** på varje övning: musklerna som tränas mest lyser rött och de som hjälper till gult. Finns också direkt i passet under "Så gör du".
+- Välj i inställningarna om övningar visas med animation (standard), video eller båda.
+- **Instruktionsvideo på övningssidan** med ett tryck. HomeLift hittar en passande YouTube-video och bäddar in den. Du kan välja en egen länk.
 - **Lokala videor utan reklam:** ladda ner till servern för dina scheman eller alla övningar, eller ladda upp en egen fil. En sparad video märks med "Sparad på servern" och kan tas bort med ett tryck.
 
 **Statistik och mål**
@@ -204,6 +207,7 @@ src/videos.js              Inbäddade och lokala instruktionsvideor
 src/backup.js              Säkerhetskopior, export och import
 src/ha.js                  API och installationsfiler för Home Assistant
 public/                    Appen (HTML, CSS, JS, översättningar, ikoner, service worker)
+public/moves.js            Figurer och steg för uppvärmning och stretch
 data/                      Övningsdatabasen och svenska översättningar
 custom_components/         Home Assistant-integrationen och Lovelace-kortet (HACS)
 blueprints/                Påminnelseritningen

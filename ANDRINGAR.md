@@ -5,13 +5,16 @@ under *Att göra*, en ny image pushas och punkterna flyttas till *Klart* med ver
 
 ## Att göra
 
-- [ ] **Animation och muskelbild som förklaring på alla övningar.** Den primära förklaringen på varje övning blir en lätt animation (bilderna som växlar, som en gif) och en kroppsfigur där musklerna som tränas lyser upp: muskler som tränas mest i rött och muskler som hjälper till i gult. Gäller både övningssidan och kortet i passet, så att man snabbt ser hur övningen görs mitt i passet. Stretch- och uppvärmningsövningarna får också en tydlig steg-för-steg-förklaring och en bild som visar rörelsen, både i listan och i den guidade timern. *(tillagd 2026-11-20, ändrad 2026-11-23)*
-- [ ] **Välj video eller animation i profilen.** Animationen är standard. I profilen kan man välja att instruktionsvideon visas i stället (eller som tillval under animationen). Med animation laddas ingen video. *(tillagd 2026-11-22, ändrad 2026-11-23)*
-- [ ] **Förra passets vikter förifyllda.** När du kör samma övning igen står förra passets vikt och reps redan i varje set, utgråade. Trycker du bara på bocken för setet sparas de gråa värdena som de är, utan att du behöver skriva något. Ändrar du ett värde gäller det nya. *(tillagd 2026-11-23)*
-- [ ] **Behåll platsen i passet.** Går man från passet in på en övning för att se instruktionerna och sedan trycker på tillbaka, hamnar man på samma ställe i passet som innan, i stället för längst upp. *(tillagd 2026-11-23)*
-- [ ] **Vilotimern följer med.** Vilotimern fortsätter och syns på alla sidor, t.ex. när man tittar på en övnings instruktioner, och man kommer tillbaka till passet med ett tryck. *(tillagd 2026-11-23)*
+_Tom just nu._
 
 ## Klart
+
+### 0.5.0 (2026-11-23)
+- [x] **Animation och muskelbild som förklaring på alla övningar.** Den primära förklaringen på varje övning blir en lätt animation (bilderna som växlar, som en gif) och en kroppsfigur där musklerna som tränas lyser upp: muskler som tränas mest i rött och muskler som hjälper till i gult. Gäller både övningssidan och kortet i passet, så att man snabbt ser hur övningen görs mitt i passet. Stretch- och uppvärmningsövningarna får också en tydlig steg-för-steg-förklaring och en bild som visar rörelsen, både i listan och i den guidade timern. *(tillagd 2026-11-20, ändrad 2026-11-23)*
+- [x] **Välj video eller animation i profilen.** Animationen är standard. I profilen kan man välja att instruktionsvideon visas i stället (eller som tillval under animationen). Med animation laddas ingen video. *(tillagd 2026-11-22, ändrad 2026-11-23)*
+- [x] **Förra passets vikter förifyllda.** När du kör samma övning igen står förra passets vikt och reps redan i varje set, utgråade. Trycker du bara på bocken för setet sparas de gråa värdena som de är, utan att du behöver skriva något. Ändrar du ett värde gäller det nya. *(tillagd 2026-11-23)*
+- [x] **Behåll platsen i passet.** Går man från passet in på en övning för att se instruktionerna och sedan trycker på tillbaka, hamnar man på samma ställe i passet som innan, i stället för längst upp. *(tillagd 2026-11-23)*
+- [x] **Vilotimern följer med.** Vilotimern fortsätter och syns på alla sidor, t.ex. när man tittar på en övnings instruktioner, och man kommer tillbaka till passet med ett tryck. *(tillagd 2026-11-23)*
 
 ### 0.4.0 (2026-11-20)
 - [x] **Tydligare lokal video.** När videon redan är nedladdad ska alternativet att ladda ner den döljas och ersättas med "Ta bort videon". Tas videon bort kommer "Ladda ner" tillbaka. Gör det tydligt att videon ligger lokalt, t.ex. "Sparad på servern" i en grön ruta. *(tillagd 2026-11-20)*

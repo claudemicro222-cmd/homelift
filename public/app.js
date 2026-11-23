@@ -284,16 +284,28 @@ function setTab(tab) {
 
 // ---------- Router ----------
 const views = {};
+// Scrollposition per sida, så att man hamnar på samma ställe i passet när man går tillbaka
+const scrollMem = {};
+let shownHash = null, scrollQueued = false;
+window.addEventListener('scroll', () => {
+  if (scrollQueued) return; scrollQueued = true;
+  requestAnimationFrame(() => { scrollQueued = false; if (shownHash === location.hash) scrollMem[shownHash] = window.scrollY; });
+}, { passive: true });
 async function render() {
   const [, route, ...args] = (location.hash || '#/').slice(1).split('/');
   if (!user && route !== 'profil') { location.hash = '#/profil'; return; }
-  if (route !== 'pass') stopTimer();
   if (route !== 'pass') document.querySelectorAll('.pr-pop').forEach(x => x.remove());
+  shownHash = null;
+  const hash = location.hash;
   const view = views[route || 'home'] || views.home;
   try { await view(...args.map(decodeURIComponent)); }
   catch (e) { console.error(e); app.innerHTML = `<div class="card"><h3>${t('oops')}</h3><p>${esc(e.message)}</p><a class="btn" href="#/">${t('toStart')}</a></div>`; }
-  if (!render.keepScroll) window.scrollTo(0, 0);
+  if (render.keepScroll) { /* stanna där man är */ }
+  else if (route === 'pass' && scrollMem[hash]) window.scrollTo(0, scrollMem[hash]);
+  else window.scrollTo(0, 0);
   render.keepScroll = false;
+  shownHash = location.hash;
+  timerLink();
 }
 window.addEventListener('hashchange', render);
 $('#userBtn').onclick = () => { location.hash = '#/profil'; };
@@ -661,7 +673,8 @@ function mobilityCard(kind, groups) {
   return `<div class="card">
     <div class="row between"><div class="row"><span class="thumb icon-thumb" style="width:40px;height:40px">${icon(kind === 'warmup' ? 'flame' : 'stretch')}</span><div><h3>${t(kind)}</h3><div class="muted small">${t(kind + 'Text', { n: minutes })}</div></div></div></div>
     <details class="mob"><summary class="small">${t('showMoves', { n: items.length })}</summary>
-    <ul class="mob-list">${items.map(m => `<li><div><b>${esc(m[lang][0])}</b><div class="muted small">${esc(m[lang][1])}</div></div><span class="sec">${m.side ? `${m.s / 2} s ${t('perSide')}` : `${m.s} s`}</span></li>`).join('')}</ul></details>
+    <ul class="mob-list">${items.map(m => `<li>${moveSvg(m.id, 'sm')}<div class="grow"><div class="row between" style="align-items:baseline"><b>${esc(m[lang][0])}</b><span class="sec">${m.side ? `${m.s / 2} s ${t('perSide')}` : `${m.s} s`}</span></div>
+      <ol class="move-steps">${(MOVES[m.id]?.[lang] || [m[lang][1]]).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div></li>`).join('')}</ul></details>
     <button class="btn secondary block" data-guided="${kind}" style="margin-top:10px">${icon('play', 'sm')}${t('startGuided')}</button>
   </div>`;
 }
@@ -669,9 +682,9 @@ function guidedSteps(kind, groups) {
   const steps = [];
   for (const m of mobilityFor(kind, groups).items) {
     if (m.side) {
-      steps.push({ name: `${m[lang][0]} (1/2)`, desc: m[lang][1], seconds: m.s / 2 });
-      steps.push({ name: `${m[lang][0]} (2/2)`, desc: m[lang][1], seconds: m.s / 2 });
-    } else steps.push({ name: m[lang][0], desc: m[lang][1], seconds: m.s });
+      steps.push({ name: `${m[lang][0]} (1/2)`, desc: m[lang][1], seconds: m.s / 2, move: m.id });
+      steps.push({ name: `${m[lang][0]} (2/2)`, desc: m[lang][1], seconds: m.s / 2, move: m.id });
+    } else steps.push({ name: m[lang][0], desc: m[lang][1], seconds: m.s, move: m.id });
   }
   return steps;
 }
@@ -683,18 +696,28 @@ function runSteps(steps, { title, onDone, getReady = 5 } = {}) {
   const all = getReady ? [{ name: t('getReady'), desc: steps[0]?.name, seconds: getReady, prep: true }, ...steps] : steps;
   let idx = 0, left = all[0].seconds, paused = false, iv, lastTick = Date.now(), activeSeconds = 0;
   const R = 100, C = 2 * Math.PI * R;
-  const d = modal(`<div class="bigtimer"><div class="eyebrow">${esc(title || '')}</div>
+  const withMoves = all.some(x => x.move);
+  const d = modal(`<div class="bigtimer ${withMoves ? 'with-move' : ''}"><div class="eyebrow">${esc(title || '')}</div>
+    ${withMoves ? '<div id="rmove" class="rmove"></div>' : ''}
     <div class="ring"><svg viewBox="0 0 220 220"><circle class="bg" cx="110" cy="110" r="${R}"/><circle class="fg" id="rfg" cx="110" cy="110" r="${R}" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
       <div class="num"><b id="rnum"></b><small id="rsub"></small></div></div>
-    <h3 id="rname"></h3><p class="muted small" id="rdesc"></p><p class="muted small" id="rnext"></p>
+    <h3 id="rname"></h3><p class="muted small" id="rdesc"></p><ol class="move-steps big" id="rsteps"></ol><p class="muted small" id="rnext"></p>
     <div class="wizard-nav"><button class="btn ghost" id="rpause">${t('pause')}</button><button class="btn ghost" id="rskip">${t('skip')}</button><button class="btn" id="rstop">${t('done')}</button></div></div>`);
   keepAwake(true);
+  let drawnMove = null;
   const draw = () => {
     const st = all[idx];
+    // Figur och steg för uppvärmning/stretch (under nedräkningen innan visas nästa rörelse)
+    const mv = st.move || (st.prep ? all[idx + 1]?.move : null);
+    if (withMoves && drawnMove !== idx) {
+      drawnMove = idx;
+      $('#rmove', d).innerHTML = mv ? moveSvg(mv, 'lg') : '';
+      $('#rsteps', d).innerHTML = mv ? (MOVES[mv]?.[lang] || []).map(x => `<li>${esc(x)}</li>`).join('') : '';
+    }
     $('#rnum', d).textContent = left >= 60 ? fmtTime(Math.ceil(left)) : Math.ceil(left);
     $('#rsub', d).textContent = paused ? t('paused') : `${idx + (getReady ? 0 : 1)}/${steps.length}`;
     $('#rname', d).textContent = st.name;
-    $('#rdesc', d).textContent = st.prep ? '' : st.desc || '';
+    $('#rdesc', d).textContent = st.prep || st.move ? '' : st.desc || '';
     $('#rnext', d).textContent = all[idx + 1] ? t('upNext', { name: all[idx + 1].name }) : '';
     $('#rfg', d).style.strokeDashoffset = C * (1 - left / st.seconds);
     $('#rfg', d).style.stroke = st.prep ? 'var(--warn)' : 'var(--brand)';
@@ -764,7 +787,7 @@ views.pass = async id => {
   const setInfo = (xi, setNo) => {
     const it = s.items[xi]; if (!it) return null;
     const row = app.querySelector(`[data-set="${xi}:${setNo}"]`);
-    return { name: exName(it.exercise), set: setNo, sets: it.sets, timed: it.timed, weight: Number(row?.querySelector('[name=w]')?.value) || 0, reps: row?.querySelector('[name=r]')?.value || (it.timed ? it.secMax : it.repsMax) };
+    return { name: exName(it.exercise), set: setNo, sets: it.sets, timed: it.timed, weight: Number(fieldVal(row?.querySelector('[name=w]'))) || 0, reps: fieldVal(row?.querySelector('[name=r]')) || (it.timed ? it.secMax : it.repsMax) };
   };
   const firstUp = () => {
     const xi = s.items.findIndex(it => it.logs.length < it.sets);
@@ -787,6 +810,18 @@ views.pass = async id => {
       d.close(); toast(t('swappedTo', { name: exName(alts.concat(original || []).find(a => a.id === pk.dataset.pick)) })); render.keepScroll = true; render();
     });
   });
+  // Så gör du: animation, muskelbild och instruktioner direkt i passet (laddas när den öppnas)
+  app.querySelectorAll('details[data-howto]').forEach(dt => dt.addEventListener('toggle', async () => {
+    const body = $('.howto-body', dt);
+    if (!dt.open || body.dataset.loaded) return;
+    body.dataset.loaded = 1;
+    const it = s.items[Number(dt.dataset.howto)];
+    const ex = await api(`/exercises/${encodeURIComponent(it.exerciseId)}?lang=${lang}`).catch(() => it.exercise);
+    body.innerHTML = `${ex.images?.length ? `<div class="anim">${ex.images.slice(0, 2).map((_, i) => `<img src="${img(ex, i)}" alt="">`).join('')}</div>` : ''}
+      ${exMuscleCard(ex, true)}
+      ${ex.instructions?.length ? `<ol class="instructions small">${ex.instructions.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      <a class="small" href="#/ovning/${encodeURIComponent(it.exerciseId)}">${t('openExercise')}</a>`;
+  }));
   // Ansträngning per set
   app.querySelectorAll('[data-rpe] button').forEach(b => b.onclick = async () => {
     const box = b.closest('[data-rpe]'), [xi, setNo] = box.dataset.rpe.split(':').map(Number), it = s.items[xi];
@@ -800,7 +835,9 @@ views.pass = async id => {
   async function logSet(btn, xi, setNo, value) {
     const it = s.items[xi];
     const row = btn.closest('[data-set]');
-    const w = row.querySelector('[name=w]')?.value;
+    const wEl = row.querySelector('[name=w]');
+    const w = fieldVal(wEl);
+    if (wEl && !wEl.value && w) wEl.value = w;
     const body = it.timed ? { exerciseId: it.exerciseId, setNo, seconds: value } : { exerciseId: it.exerciseId, setNo, weight: w, reps: value };
     const res = await api(`/sessions/${id}/sets`, { method: 'PUT', body });
     btn.classList.add('done'); btn.innerHTML = icon('check');
@@ -809,10 +846,11 @@ views.pass = async id => {
     // Personbästa: fira en gång per övning och typ (igen bara om det slås en gång till)
     const fresh = (res.pr || []).filter(p => { const k = it.exerciseId + p.type; if (shownPr[k] >= p.value) return false; shownPr[k] = p.value; return true; });
     if (fresh.length) celebrate(fresh[0], it);
+    // Nästa set får det nyss loggade som gråa värden (om det inte redan är ifyllt)
     const next = app.querySelector(`[data-set="${xi}:${setNo + 1}"]`);
     if (next) {
-      const nw = next.querySelector('[name=w]'); if (nw && !nw.value) nw.value = w;
-      const nr = next.querySelector('[name=r]'); if (!nr.value) nr.value = value;
+      const nw = next.querySelector('[name=w]'); if (nw && !nw.value && w) nw.placeholder = w;
+      const nr = next.querySelector('[name=r]'); if (nr && !nr.value) nr.placeholder = value;
     }
     const card = btn.closest('.ex-card');
     card.classList.toggle('complete', [...card.querySelectorAll('.check:not(.play)')].every(c => c.classList.contains('done')));
@@ -843,7 +881,7 @@ views.pass = async id => {
   });
   app.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => {
     const xi = Number(b.dataset.plates);
-    const vals = [...app.querySelectorAll(`[data-set^="${xi}:"] [name=w]`)].map(i => Number(i.value) || 0);
+    const vals = [...app.querySelectorAll(`[data-set^="${xi}:"] [name=w]`)].map(i => Number(fieldVal(i)) || 0);
     plateCalc(Math.max(...vals, s.items[xi].suggestion?.weight || 0) || 60);
   });
   app.querySelectorAll('.check:not(.play)').forEach(btn => btn.onclick = async () => {
@@ -858,8 +896,10 @@ views.pass = async id => {
       it.logs = it.logs.filter(l => l.set_no !== setNo);
       return;
     }
-    const r = row.querySelector('[name=r]').value;
+    const rEl = row.querySelector('[name=r]');
+    const r = fieldVal(rEl);
     if (!r) return toast(t(it.timed ? 'fillSeconds' : 'fillReps'));
+    if (!rEl.value) rEl.value = r;
     logSet(btn, xi, setNo, r);
   });
   // Tidsövning: starta nedräkning, logga tiden när den är klar
@@ -867,7 +907,7 @@ views.pass = async id => {
     const row = btn.closest('[data-set]');
     const [xi, setNo] = row.dataset.set.split(':').map(Number);
     const it = s.items[xi];
-    const target = Number(row.querySelector('[name=r]').value) || it.secMax;
+    const target = Number(fieldVal(row.querySelector('[name=r]'))) || it.secMax;
     stopTimer();
     runSteps([{ name: exName(it.exercise), desc: `${t('colSet')} ${setNo}`, seconds: target }], {
       title: `${t('colSet')} ${setNo}/${it.sets}`, getReady: 5,
@@ -890,26 +930,31 @@ views.pass = async id => {
     await api(`/sessions/${id}`, { method: 'DELETE' }); stopTimer(); location.hash = '#/';
   };
 };
+// Värde som står utgråat i fältet (förra passets siffra). Används om man bara bockar av setet.
+const phNum = el => /^\d+([.,]\d+)?$/.test(el?.placeholder || '') ? el.placeholder.replace(',', '.') : '';
+const fieldVal = el => el ? (el.value || phNum(el)) : '';
 function setRow(it, xi, n, log, done) {
   const sug = it.suggestion;
   const last = sug?.lastSets?.find(l => l.set_no === n);
+  // Fler set än förra gången: använd förra passets sista set som förslag
+  const prefill = last || sug?.lastSets?.at(-1);
   const prevRow = (last ? `<div class="prev">${t('lastShort')}: ${esc(lastSetTxt(it, last))}${last.rpe ? ` · ${esc(rpeLabel(last.rpe))}` : ''}</div>` : '')
     + (done ? (log?.rpe ? `<div class="prev">${esc(rpeLabel(log.rpe))}</div>` : '') : `<div class="rpe" data-rpe="${xi}:${n}" ${log ? '' : 'hidden'}><span>${t('howHard')}</span>${RPE.map(([v, k]) => `<button type="button" data-v="${v}" class="${log?.rpe === v ? 'on' : ''}">${t(k)}</button>`).join('')}</div>`);
   if (it.timed) {
-    const v = log?.seconds ?? (sug?.seconds || '');
+    const v = log?.seconds ?? '';
     return `<div class="set-no">${n}</div>
       <div data-set="${xi}:${n}" style="display:contents">
-        <input name="r" type="number" inputmode="numeric" min="0" value="${v}" placeholder="${last?.seconds ?? it.secMin + '–' + it.secMax}" ${done ? 'disabled' : ''} aria-label="${t('colSec')} ${n}">
+        <input name="r" type="number" inputmode="numeric" min="0" value="${v}" placeholder="${prefill?.seconds ?? it.secMin + '–' + it.secMax}" ${done ? 'disabled' : ''} aria-label="${t('colSec')} ${n}">
         <button class="check play" ${done ? 'disabled' : ''} aria-label="${t('start')} ${n}">${icon('play', 'sm')}</button>
         <button class="check ${log ? 'done' : ''}" ${done ? 'disabled' : ''} aria-label="${t('done')} ${n}">${icon(log ? 'check' : 'circle')}</button>
       </div>${prevRow}`;
   }
-  const w = log?.weight ?? (sug?.weight || '');
+  const w = log?.weight ?? '';
   const r = log?.reps ?? '';
   return `<div class="set-no">${n}</div>
     <div data-set="${xi}:${n}" style="display:contents">
-      <input name="w" type="number" inputmode="decimal" step="0.5" min="0" value="${w}" placeholder="${last?.weight ?? t('kg')}" ${done ? 'disabled' : ''} aria-label="${t('colKg')} ${n}">
-      <input name="r" type="number" inputmode="numeric" min="0" value="${r}" placeholder="${last?.reps ?? it.repsMin + '–' + it.repsMax}" ${done ? 'disabled' : ''} aria-label="${t('colReps')} ${n}">
+      <input name="w" type="number" inputmode="decimal" step="0.5" min="0" value="${w}" placeholder="${prefill?.weight ?? (sug?.weight || t('kg'))}" ${done ? 'disabled' : ''} aria-label="${t('colKg')} ${n}">
+      <input name="r" type="number" inputmode="numeric" min="0" value="${r}" placeholder="${prefill?.reps ?? it.repsMin + '–' + it.repsMax}" ${done ? 'disabled' : ''} aria-label="${t('colReps')} ${n}">
       <button class="check ${log ? 'done' : ''}" ${done ? 'disabled' : ''} aria-label="${t('done')} ${n}">${icon(log ? 'check' : 'circle')}</button>
     </div>${prevRow}`;
 }
@@ -985,6 +1030,7 @@ function exCard(it, xi, done, prev) {
       <div class="muted small">${itemScheme(it)}</div></div>${it.timed ? `<span class="pill">${icon('clock', 'sm')}</span>` : ''}
       ${barbell && !done ? `<button class="btn ghost sm" data-plates="${xi}" aria-label="${t('plateCalc')}" title="${t('plateCalc')}">${icon('plates', 'sm')}</button>` : ''}
       ${!done && it.index != null && !it.logs.length ? `<button class="btn ghost sm" data-sswap="${xi}" aria-label="${t('swapInWorkoutBtn')}" title="${t('swapInWorkoutBtn')}">${icon('swap', 'sm')}</button>` : ''}</div>
+    <details class="howto" data-howto="${xi}"><summary>${icon('info', 'sm')}${t('howToShort')}</summary><div class="howto-body"></div></details>
     ${it.swappedFrom ? `<div class="muted small" style="margin-top:6px">${icon('swap', 'sm')} ${t('swappedFrom', { name: esc(SVN[it.swappedFrom] || it.swappedFromName || '') })}</div>` : ''}
     ${!done && sug ? `<div class="hint ${sug.deload ? 'warn' : ''}">${icon(sug.deload ? 'info' : sug.increase ? 'trend' : 'info')}<div class="grow"><span>${esc(reason || t('keepGoing'))}</span>
       ${target ? `<div class="row between" style="margin-top:6px"><b>${t('suggestion')}: ${esc(target)}</b><button class="btn secondary sm" data-apply="${xi}">${t('useSuggestion')}</button></div>` : ''}</div></div>` : ''}
@@ -1031,18 +1077,29 @@ function cardioView(s) {
 
 // ---------- Vilotimer ----------
 let timerIv = null;
+// Vilotimern ligger kvar på alla sidor. Tryck på den för att gå tillbaka till passet.
+let timerHash = null;
+function timerLink() {
+  const el = $('#timer'); if (!el || el.hidden) return;
+  const away = timerHash && location.hash !== timerHash;
+  el.classList.toggle('away', !!away);
+  const back = $('.back', el); if (back) back.hidden = !away;
+}
 function startTimer(sec, nextName, nextUp, resumed) {
   stopTimer();
+  if (!resumed || !timerHash) timerHash = location.hash.startsWith('#/pass/') ? location.hash : timerHash;
   if (!sec) { say(nextUpText(nextUp)); return; }
   if (!resumed) say(`${t('voiceRest', { n: sec })} ${nextUpText(nextUp)}`);
   const el = $('#timer');
   const total = sec, end = Date.now() + sec * 1000;
   el.hidden = false;
-  el.innerHTML = `${icon('clock')}<div class="lbl">${t('restTimer')}${nextName ? `<small>${esc(t('upNext', { name: nextName }))}</small>` : ''}</div><span class="t"></span>
+  el.innerHTML = `${icon('clock')}<div class="lbl" role="button" tabindex="0">${t('restTimer')}${nextName ? `<small>${esc(t('upNext', { name: nextName }))}</small>` : ''}<small class="back" hidden>${t('backToWorkout')}</small></div><span class="t"></span>
     <button id="tsound" aria-label="${t('soundSetting')}" title="${t('soundSetting')}" style="opacity:${soundOn() ? 1 : .45}">${icon('sound', 'sm')}</button>
     <button id="tplus">${t('plus30')}</button><button id="tstop">${t('done')}</button><span class="bar"></span>`;
   $('#tplus').onclick = () => startTimer(Math.max(0, Math.round((end - Date.now()) / 1000)) + 30, nextName, nextUp, true);
   $('#tstop').onclick = stopTimer;
+  $('.lbl', el).onclick = () => { if (timerHash && location.hash !== timerHash) location.hash = timerHash; };
+  timerLink();
   $('#tsound').onclick = e => { store.set('sound', !soundOn()); e.currentTarget.style.opacity = soundOn() ? 1 : .45; toast(t(soundOn() ? 'soundOn' : 'soundOff')); };
   let lastLeft = null;
   const draw = () => {
@@ -1081,16 +1138,25 @@ views.ovning = async id => {
   setTab('library');
   const [ex, rec] = await Promise.all([api(`/exercises/${encodeURIComponent(id)}?lang=${lang}`), api(`/users/${user.id}/exercises/${encodeURIComponent(id)}/records`).catch(() => ({}))]);
   const v = ex.video;
+  const mediaPref = user.prefs?.media || 'anim';
+  const animHtml = ex.images?.length ? `<div class="anim">${ex.images.slice(0, 2).map((_, i) => `<img src="${img(ex, i)}" alt="">`).join('')}</div>` : '';
+  const savedBox = v ? `<div class="saved-box">${icon('check')}<div class="grow"><b>${t('savedOnServer')}</b><div class="small">${t('savedOnServerHint')}${v.title ? ` · ${esc(v.title)}${v.channel ? ' · ' + esc(v.channel) : ''}` : ''}</div></div>
+         <button class="btn sm" id="vdel">${icon('trash', 'sm')}${t('removeVideoShort')}</button></div>` : '';
   const media = v
     ? `<video class="player" controls playsinline preload="metadata" src="${v.url}"></video>
        <div class="saved-box">${icon('check')}<div class="grow"><b>${t('savedOnServer')}</b><div class="small">${t('savedOnServerHint')}${v.title ? ` · ${esc(v.title)}${v.channel ? ' · ' + esc(v.channel) : ''}` : ''}</div></div>
          <button class="btn sm" id="vdel">${icon('trash', 'sm')}${t('removeVideoShort')}</button></div>`
-    : `<div id="embedBox">${ex.embed ? embedHtml(ex.embed) : `${ex.images?.length ? `<div class="anim">${ex.images.slice(0, 2).map((_, i) => `<img src="${img(ex, i)}" alt="">`).join('')}</div>` : ''}<p class="muted small" id="embedMsg">${t('findingVideo')}</p>`}</div>`;
+    : `<div id="embedBox">${ex.embed ? embedHtml(ex.embed) : `${mediaPref === 'video' ? animHtml : ''}<p class="muted small" id="embedMsg">${t('findingVideo')}</p>`}</div>`;
+  // Animation och muskelbild först (standard), videon visas på begäran eller enligt inställningen
+  const showVideoNow = mediaPref !== 'anim';
+  const top = mediaPref === 'video'
+    ? `<div id="videoSlot">${media}</div>${exMuscleCard(ex)}`
+    : `${animHtml}${exMuscleCard(ex)}<div id="videoSlot">${showVideoNow ? media : `<button class="btn ghost block" id="showVideo" style="margin-top:12px">${icon('video', 'sm')}${t(v ? 'showLocalVideo' : 'showVideo')}</button>${savedBox}`}</div>`;
   app.innerHTML = `
     <a href="javascript:history.back()" class="small row" style="gap:4px;text-decoration:none">${icon('arrow', 'sm')}${t('back')}</a>
     <h1 style="margin-top:8px">${esc(ex.name)}</h1>
     ${lang === 'sv' && ex.name_en !== ex.name ? `<p class="muted small" style="margin-top:-6px">${esc(ex.name_en)}</p>` : ''}
-    ${media}
+    ${top}
     <div class="card" style="margin-top:12px">
       <div class="row wrap">
         <span class="pill">${esc(ex.equipment ? equip(ex.equipment) : t('noEquipment'))}</span>
@@ -1098,7 +1164,6 @@ views.ovning = async id => {
         ${ex.mechanic ? `<span class="pill">${ex.mechanic === 'compound' ? t('compound') : t('isolation')}</span>` : ''}
         ${ex.timed ? `<span class="pill">${icon('clock', 'sm')}${t('timedExercise')}</span>` : ''}
       </div>
-      <p><b>${t('primary')}:</b> ${ex.primaryMuscles.map(muscle).join(', ')}${ex.secondaryMuscles.filter(m => !ex.primaryMuscles.includes(m)).length ? `<br><b>${t('secondary')}:</b> ${ex.secondaryMuscles.filter(m => !ex.primaryMuscles.includes(m)).map(muscle).join(', ')}` : ''}</p>
       ${ex.equipment === 'barbell' ? `<button class="btn ghost block" id="plates" style="margin-bottom:8px">${icon('plates', 'sm')}${t('plateCalc')}</button>` : ''}
       ${ex.custom ? `<div class="row" style="gap:8px;margin-bottom:8px"><button class="btn ghost grow" id="cedit">${icon('edit', 'sm')}${t('editCustom')}</button><button class="btn danger" id="cdel" aria-label="${t('remove')}">${icon('trash', 'sm')}</button></div>` : ''}
       <button class="btn ghost block" id="addToProg" style="margin-bottom:8px">${icon('plus', 'sm')}${t('addToProgram')}</button>
@@ -1117,17 +1182,21 @@ views.ovning = async id => {
     ${rec ? recordsBlock(rec) : ''}
     <div class="card"><h3>${t('howTo')}</h3>${!ex.translated && lang === 'sv' ? `<p class="muted small">${t('englishNote')}</p>` : ''}
       ${ex.instructions.length ? `<ol class="instructions">${ex.instructions.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : `<p class="muted small">${t('noInstructions')}</p>`}</div>`;
-  // Hitta en video att bädda in första gången övningen visas
-  if (!v && !ex.embed) {
+  // Hitta en video att bädda in första gången övningen visas (bara när videon visas)
+  const findEmbed = () => {
+    if (v || ex.embed) return;
     api(`/exercises/${encodeURIComponent(ex.id)}/embed`).then(e => {
-      if (e?.videoId && $('#embedBox')) $('#embedBox').innerHTML = embedHtml(e); else if ($('#embedMsg')) $('#embedMsg').textContent = '';
+      if (e?.videoId && $('#embedBox')) $('#embedBox').innerHTML = embedHtml(e); else if ($('#embedMsg')) $('#embedMsg').textContent = e?.videoId ? '' : t('noVideoFound');
     }).catch(err => { if ($('#embedMsg')) $('#embedMsg').textContent = t('noEmbed', { err: err.message }); });
-  }
-  $('#plates')?.addEventListener('click', () => plateCalc(rec?.weight?.value || 60));
-  $('#vdel')?.addEventListener('click', async () => {
+  };
+  const bindVdel = () => $('#vdel')?.addEventListener('click', async () => {
     if (!confirm(t('removeVideoConfirm'))) return;
     await api(`/videos/${encodeURIComponent(ex.id)}`, { method: 'DELETE' }); toast(t('videoRemoved')); render.keepScroll = true; render();
   });
+  if (showVideoNow) findEmbed();
+  bindVdel();
+  $('#showVideo')?.addEventListener('click', () => { $('#videoSlot').innerHTML = media; findEmbed(); bindVdel(); });
+  $('#plates')?.addEventListener('click', () => plateCalc(rec?.weight?.value || 60));
   $('#cedit')?.addEventListener('click', () => customForm(ex));
   $('#cdel')?.addEventListener('click', async () => {
     if (!confirm(t('removeCustomConfirm', { name: ex.name }))) return;
@@ -1217,6 +1286,21 @@ function customForm(ex) {
       if (ex) { render.keepScroll = true; render(); } else location.hash = `#/ovning/${encodeURIComponent(out.id)}`;
     } catch (err) { toast(err.message); }
   };
+}
+// Kroppsfigur där övningens muskler lyser: rött tränas mest, gult hjälper till
+const MUS_MAIN = 'var(--danger)', MUS_HELP = '#eab308';
+function exMuscleFill(ex) {
+  const prim = ex.primaryMuscles || [], sec = (ex.secondaryMuscles || []).filter(m => !prim.includes(m));
+  return m => prim.includes(m) ? MUS_MAIN : sec.includes(m) ? MUS_HELP : 'var(--line)';
+}
+function exMuscleCard(ex, compact) {
+  const prim = ex.primaryMuscles || [], sec = (ex.secondaryMuscles || []).filter(m => !prim.includes(m));
+  if (!prim.length) return '';
+  const fill = exMuscleFill(ex);
+  return `<div class="${compact ? 'muscle-mini' : 'card muscle-card'}">
+    <div class="bodymaps ${compact ? 'small' : ''}">${bodySvg(BODY_FRONT, fill, t('frontView'))}${bodySvg(BODY_BACK, fill, t('backView'))}</div>
+    <div class="mus-legend"><div><i style="background:${MUS_MAIN}"></i><b>${t('musMain')}:</b> ${prim.map(muscle).join(', ')}</div>
+      ${sec.length ? `<div><i style="background:${MUS_HELP}"></i><b>${t('musHelp')}:</b> ${sec.map(muscle).join(', ')}</div>` : ''}</div></div>`;
 }
 function embedHtml(e) {
   return `<div class="player embed"><iframe src="${ytEmbed(e.videoId)}" title="${esc(e.title || 'YouTube')}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
@@ -1490,6 +1574,7 @@ views.installningar = async () => {
     <div class="card stack">
       <div><label class="field">${t('language')}</label>${seg('lang', [['sv', 'Svenska'], ['en', 'English']], lang)}</div>
       <div><label class="field">${t('theme')}</label>${seg('theme', [['auto', t('themeAuto')], ['light', t('themeLight')], ['dark', t('themeDark')]], store.get('theme') || 'auto')}</div>
+      <div><label class="field">${t('mediaSetting')}</label>${seg('media', [['anim', t('mediaAnim')], ['video', t('mediaVideo')], ['both', t('mediaBoth')]], user.prefs.media || 'anim')}<p class="muted small" style="margin:6px 0 0">${t('mediaHint')}</p></div>
     </div>
     <h2>${t('workoutSettings')}</h2>
     <div class="card" style="padding-top:4px;padding-bottom:4px">
@@ -1535,7 +1620,9 @@ views.installningar = async () => {
   };
   app.querySelectorAll('[data-seg] button').forEach(b => b.onclick = async () => {
     const k = b.closest('[data-seg]').dataset.seg;
-    if (k === 'lang') await setLang(b.dataset.v); else setTheme(b.dataset.v);
+    if (k === 'lang') await setLang(b.dataset.v);
+    else if (k === 'media') { user = await api(`/users/${user.id}`, { method: 'PATCH', body: { prefs: { media: b.dataset.v } } }); store.set('user', user); toast(t('saved')); }
+    else setTheme(b.dataset.v);
     render.keepScroll = true; render();
   });
   app.querySelectorAll('[data-pref]').forEach(i => i.onchange = async () => {

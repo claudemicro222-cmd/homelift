@@ -1,7 +1,7 @@
 // Service worker: appens skal och övningsbilder cachas. API-svar sparas som reserv när servern inte går att nå (offlineläge).
-const CACHE = 'homelift-v4';
+const CACHE = 'homelift-v5';
 const API_CACHE = 'homelift-api-v1';
-const SHELL = ['/', '/index.html', '/app.js', '/i18n.js', '/style.css', '/icon.svg', '/manifest.webmanifest'];
+const SHELL = ['/', '/index.html', '/app.js', '/i18n.js', '/moves.js', '/style.css', '/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== API_CACHE).map(k => caches.delete(k)))));

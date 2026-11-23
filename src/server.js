@@ -143,7 +143,7 @@ function getUser(id) {
   if (!u) throw new HttpError(404, 'Profile not found');
   const w = q('SELECT weight, date FROM bodyweight WHERE user_id = ? ORDER BY date DESC LIMIT 1').get(id);
   const bmi = w && u.height_cm ? w.weight / (u.height_cm / 100) ** 2 : null;
-  return { id: u.id, name: u.name, created_at: u.created_at, height_cm: u.height_cm, prefs: { warmup: true, stretch: true, weekly_goal: null, ...JSON.parse(u.prefs || '{}') }, weight: w?.weight ?? null, weight_date: w?.date ?? null, bmi: bmi ? Math.round(bmi * 10) / 10 : null };
+  return { id: u.id, name: u.name, created_at: u.created_at, height_cm: u.height_cm, prefs: { warmup: true, stretch: true, weekly_goal: null, media: 'anim', ...JSON.parse(u.prefs || '{}') }, weight: w?.weight ?? null, weight_date: w?.date ?? null, bmi: bmi ? Math.round(bmi * 10) / 10 : null };
 }
 
 // Förslag på vikt (eller tid): samma som förra gången, eller ökning om alla set nådde övre gränsen
@@ -487,6 +487,7 @@ route('PATCH', '/api/users/:uid', ({ uid }, body) => {
   if (body.prefs && typeof body.prefs === 'object') {
     const prefs = { ...u.prefs };
     for (const k of ['warmup', 'stretch']) if (k in body.prefs) prefs[k] = !!body.prefs[k];
+    if (['anim', 'video', 'both'].includes(body.prefs.media)) prefs.media = body.prefs.media;
     if ('weekly_goal' in body.prefs) { const g = Number(body.prefs.weekly_goal); prefs.weekly_goal = g >= 1 && g <= 14 ? Math.round(g) : null; }
     q('UPDATE users SET prefs = ? WHERE id = ?').run(JSON.stringify(prefs), uid);
   }
