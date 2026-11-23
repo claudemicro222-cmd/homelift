@@ -186,7 +186,7 @@ HomeLift har ingen inloggning, så exponera den inte öppet mot internet. Använ
 
 ## Ändringar
 
-Önskade ändringar och vad som ingår i varje version finns i [ANDRINGAR.md](ANDRINGAR.md).
+Vad som är nytt i varje version finns i [CHANGELOG.md](CHANGELOG.md) och under [Releases](https://github.com/claudemicro222-cmd/homelift/releases). Önskade ändringar samlas i [ANDRINGAR.md](ANDRINGAR.md).
 
 ## Teknik
 
